@@ -54,8 +54,8 @@ Ensure you have the following installed on your machine:
 2. **Environment Configuration:**
 Create .env files for both backend and frontend. You can use the example files as a reference:
 # Example (create these files manually)
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+- cp backend/.env.example backend/.env
+- cp frontend/.env.example frontend/.env
 
 3. **Run with Docker Compose:**
 This command will build the images and start the database, backend, and frontend containers:
@@ -66,9 +66,9 @@ docker-compose up --build
 ### Accessing the Application
 Once the containers are running, you can access the services at:
 
-Frontend: http://localhost:3001
-Backend API: http://localhost:3000
-Database: localhost:5432
+- Frontend: http://localhost:3001
+- Backend API: http://localhost:3000
+- Database: localhost:5432
 
 ### Project Structure
 ```bash
