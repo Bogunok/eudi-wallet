@@ -1,0 +1,47 @@
+// backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Користувач (Адміністратор гаманця організації)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Хеш пароля
+  createdAt DateTime @default(now())
+  
+  // Зв'язки
+  credentials VerifiableCredential[]
+  didDocuments DidDocument[]
+}
+
+// 2. DID 
+model DidDocument {
+  id        String   @id @default(uuid())
+  did       String   @unique // Сам рядок DID
+  method    String   // 'key', 'ebsi', 'web'
+  privateKey String  // Зашифрований приватний ключ
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// 3. Verifiable Credential
+model VerifiableCredential {
+  id          String   @id @default(uuid())
+  type        String[] // Наприклад ['VerifiableCredential', 'LegalEntity']
+  issuerDid   String   // DID емітента
+  subjectDid  String   // DID організації-отримувача
+  payload     Json     // Всі дані сертифікату (JSON)
+  status      String   // 'active', 'revoked'
+  issuedAt    DateTime
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}

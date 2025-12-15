@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # 1. База Даних
+  db:
+    image: postgres:15-alpine
+    container_name: eudi_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: eudi_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Бекенд (NestJS)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eudi_backend
+    ports:
+      - "3000:3000"
+    environment:
+      # Підключення до БД (хост 'db' - це назва сервісу вище)
+      DATABASE_URL: postgres://admin:root@db:5432/eudi_db
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # 3. Фронтенд (NextJS)
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: eudi_frontend
+    ports:
+      - "3001:3000" # На комп'ютері буде порт 3001
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
