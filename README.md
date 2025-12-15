@@ -71,7 +71,7 @@ Backend API: http://localhost:3000
 Database: localhost:5432
 
 ### Project Structure
-
+```bash
 .
 ├── backend/            # NestJS application (API)
 │   ├── src/
@@ -86,3 +86,4 @@ Database: localhost:5432
 │   └── .env            # Frontend variables
 ├── docker-compose.yml  # Orchestration configuration
 └── README.md           # Project documentation
+```
