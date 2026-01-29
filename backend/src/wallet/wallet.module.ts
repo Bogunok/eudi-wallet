@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { WalletController } from './wallet.controller';
-import { PrismaModule } from '../prisma/prisma.module'; // Треба доступ до БД
+import { PrismaModule } from '../prisma/prisma.module'; 
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule], 
+  imports: [PrismaModule, AuthModule], 
   controllers: [WalletController],
   providers: [WalletService],
 })

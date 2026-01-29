@@ -18,6 +18,7 @@ enum VerifiableCredentialStatus {
   ACTIVE
   REVOKED
   EXPIRED
+  DELETED
 }
 
 enum VerificationStatus {
@@ -31,12 +32,17 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String   // Хеш пароля
+  pin       String?  // Хеш PIN-коду
+  pinAttempts Int    @default(0) // Лічильник спроб
   role      Role     @default(HOLDER) // За замовчуванням звичайний користувач
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   // оновлення токена доступу
   refreshToken String?
   
+// Користувач може представляти одну або кілька організацій
+  organizations Organization[]
+
   // Зв'язки
   credentials VerifiableCredential[]
   didDocuments DidDocument[]
@@ -68,8 +74,30 @@ model VerifiableCredential {
   status      VerifiableCredentialStatus @default(ACTIVE)
   issuedAt    DateTime
   expiresAt   DateTime?
+  //Зв'язок з власником гаманця (користувачем)
   userId      String
   user        User     @relation(fields: [userId], references: [id])
+  //Зв'язок з організацією (юридичною особою)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// 4. Організація (Юридична особа - власник LEI та VC)
+model Organization {
+  id          String   @id @default(uuid())
+  lei         String   @unique // LEI код організації
+  name        String   // Офіційна назва
+  country     String
+  
+  // Зв'язок з представником
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  // Видані документи цій організації
+  credentials VerifiableCredential[]
+  
+  createdAt   DateTime @default(now())
 }
 
 // Схема документа для емітента
@@ -90,7 +118,7 @@ model VerificationSession {
   nonce       String             @unique // Унікальний рядок для захисту від повторів
   status      VerificationStatus @default(PENDING)
   
-  // Що ми запитували? (наприклад, type: "UniversityDegree")
+  // Що ми запитували? (тип документа, дані)
   requestedType String
   
   // Результат перевірки (хто пред'явив, які дані)
