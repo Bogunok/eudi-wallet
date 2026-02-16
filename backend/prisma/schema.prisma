@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,9 +8,10 @@ datasource db {
 }
 
 enum Role {
-  HOLDER   // власник гаманця
-  ISSUER   // Емітент
-  VERIFIER // Верифікатор
+  HOLDER
+  ISSUER
+  VERIFIER
+  ADMIN
 }
 
 enum VerifiableCredentialStatus {
@@ -27,106 +27,106 @@ enum VerificationStatus {
   REJECTED
 }
 
-// 1. Користувач (Адміністратор гаманця організації)
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String   // Хеш пароля
-  pin       String?  // Хеш PIN-коду
-  pinAttempts Int    @default(0) // Лічильник спроб
-  role      Role     @default(HOLDER) // За замовчуванням звичайний користувач
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String // Хеш пароля
+  pin          String? // Хеш PIN-коду
+  pinAttempts  Int      @default(0) // Лічильник спроб
+  role         Role     @default(HOLDER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   // оновлення токена доступу
   refreshToken String?
-  
-// Користувач може представляти одну або кілька організацій
+
+  // Користувач може представляти одну або кілька організацій
   organizations Organization[]
 
   // Зв'язки
-  credentials VerifiableCredential[]
+  credentials  VerifiableCredential[]
   didDocuments DidDocument[]
 
-  schemas     VerifiableCredentialSchema[]    // Для Issuer: шаблон документів, які він створив
+  schemas              VerifiableCredentialSchema[] // Для Issuer: шаблон документів, які він створив
   verificationSessions VerificationSession[] // Для Verifier: сесії перевірки
 }
 
-// 2. DID 
 model DidDocument {
-  id         String   @id @default(uuid())
-  did        String   @unique // Сам рядок DID
-  method     String   // 'key', 'ebsi', 'web'
-  keyId      String?  // ID ключа у документі (наприклад, #key-1), потрібно для підпису
-  privateKey String  // Зашифрований приватний ключ
-  
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  id                  String  @id @default(uuid())
+  did                 String  @unique // Сам рядок DID
+  method              String // 'key', 'ebsi', 'web'
+  keyId               String? // ID ключа у документі (наприклад, #key-1), потрібно для підпису
+  publicKey           String // публічний ключ для перевірки підписів
+  encryptedPrivateKey String // зашифрований приватний ключ
+  encryptionSalt      String
+  encryptionIv        String // Вектор ініціалізації (IV) для AES-GCM
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }
 
-// 3. Verifiable Credential
 model VerifiableCredential {
-  id          String   @id @default(uuid())
-  type        String[] // Наприклад ['VerifiableCredential', 'LegalEntity']
-  issuerDid   String   // DID емітента
-  subjectDid  String   // DID організації-отримувача
-  payload     Json     // Всі дані сертифікату (JSON)
-  rawJwt      String   // Оригінальний підписаний токен (JWT/SD-JWT)
-  status      VerifiableCredentialStatus @default(ACTIVE)
-  issuedAt    DateTime
-  expiresAt   DateTime?
+  id             String                     @id @default(uuid())
+  type           String[] // Наприклад ['VerifiableCredential', 'LegalEntity']
+  issuerDid      String // DID емітента
+  subjectDid     String // DID організації-отримувача
+  payload        Json // Всі дані сертифікату (JSON)
+  rawJwt         String // Оригінальний підписаний токен (JWT/SD-JWT)
+  status         VerifiableCredentialStatus @default(ACTIVE)
+  issuedAt       DateTime
+  expiresAt      DateTime?
   //Зв'язок з власником гаманця (користувачем)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  userId         String
+  user           User                       @relation(fields: [userId], references: [id])
   //Зв'язок з організацією (юридичною особою)
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  createdAt   DateTime @default(now())
+  organization   Organization?              @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime                   @default(now())
 }
 
-// 4. Організація (Юридична особа - власник LEI та VC)
 model Organization {
-  id          String   @id @default(uuid())
-  lei         String   @unique // LEI код організації
-  name        String   // Офіційна назва
-  country     String
-  
+  id      String @id @default(uuid())
+  lei     String @unique // LEI код організації
+  name    String // Офіційна назва
+  country String
+
   // Зв'язок з представником
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   // Видані документи цій організації
   credentials VerifiableCredential[]
-  
-  createdAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
 }
 
 // Схема документа для емітента
 model VerifiableCredentialSchema {
-  id          String   @id @default(uuid())
-  name        String   // Назва
-  schemaId    String   // ID схеми в EBSI або IPFS
-  structure   Json    
-  
-  issuerId    String
-  issuer      User     @relation(fields: [issuerId], references: [id])
+  id        String @id @default(uuid())
+  name      String // Назва
+  schemaId  String // ID схеми в EBSI або IPFS
+  structure Json
+
+  issuerId String
+  issuer   User   @relation(fields: [issuerId], references: [id])
 }
 
-// 5. Verification Session для верифікатора
+// Verification Session для верифікатора
 // запис створюється при генерації посилання
 model VerificationSession {
-  id          String             @id @default(uuid())
-  nonce       String             @unique // Унікальний рядок для захисту від повторів
-  status      VerificationStatus @default(PENDING)
-  
+  id     String             @id @default(uuid())
+  nonce  String             @unique // Унікальний рядок для захисту від повторів
+  status VerificationStatus @default(PENDING)
+
   // Що ми запитували? (тип документа, дані)
   requestedType String
-  
+
   // Результат перевірки (хто пред'явив, які дані)
-  holderDid   String?
-  presentedData Json?  // Дані, які надіслав користувач, якщо перевірка успішна
+  holderDid     String?
+  presentedData Json? // Дані, які надіслав користувач, якщо перевірка успішна
 
-  verifierId  String
-  verifier    User               @relation(fields: [verifierId], references: [id])
+  verifierId String
+  verifier   User   @relation(fields: [verifierId], references: [id])
 
-  createdAt   DateTime           @default(now())
+  createdAt DateTime @default(now())
 }

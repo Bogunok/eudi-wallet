@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { v4 as uuidv4 } from 'uuid'; // Можливо доведеться зробити npm i uuid
 import { AuthService } from 'src/auth/auth.service';
@@ -6,10 +12,10 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService,
-    private authService: AuthService,
+  constructor(
+    private prisma: PrismaService,
+    private authService: AuthService
   ) {}
-
 
   // Метод створення DID для конкретного користувача
   async createDid(userId: string) {
@@ -38,13 +44,13 @@ export class WalletService {
     });
   }
 
-//Скидання гаманця (Reset wallet)
+  //Скидання гаманця (Reset wallet)
   async resetWallet(userId: string) {
     // Видаляємо всі DID та документи користувача, але залишаємо акаунт
     return this.prisma.$transaction([
       this.prisma.didDocument.deleteMany({ where: { userId } }),
-      this.prisma.verifiableCredential.deleteMany({ 
-        where: { organization: { userId } } 
+      this.prisma.verifiableCredential.deleteMany({
+        where: { organization: { userId } },
       }),
     ]);
   }
@@ -52,15 +58,15 @@ export class WalletService {
   // Зміна PIN-коду
   async changePin(userId: string, oldPin: string, newPin: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('Користувача не знайдено');
+    if (!user) throw new NotFoundException('User not found');
 
     if (!user.pin) {
-      throw new BadRequestException('PIN-код для цього користувача не встановлено');
+      throw new BadRequestException('PIN-code for this user is not set');
     }
 
     // Перевірка старого PIN
     const isMatch = await bcrypt.compare(oldPin, user.pin);
-    if (!isMatch) throw new UnauthorizedException('Старий PIN невірний');
+    if (!isMatch) throw new UnauthorizedException('Old PIN is incorrect');
 
     // Хешування та збереження нового PIN
     const salt = await bcrypt.genSalt();
@@ -71,5 +77,4 @@ export class WalletService {
       data: { pin: hashedPin, pinAttempts: 0 }, // Обнуляємо спроби при зміні
     });
   }
-
 }

@@ -1,4 +1,14 @@
-import { Controller, Post, Get, UseGuards, Request, Body, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  UseGuards,
+  Request,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Patch,
+} from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiOperation } from '@nestjs/swagger/dist/decorators/api-operation.decorator';
@@ -22,15 +32,15 @@ export class WalletController {
     return this.walletService.getMyDids(req.user.id);
   }
 
- @Patch('change-pin')
-  @ApiOperation({ summary: 'Змінити PIN-код гаманця' })
+  @Patch('change-pin')
+  @ApiOperation({ summary: 'Change wallet PIN code' })
   async updatePin(@Request() req, @Body() dto: ChangePinDto) {
     return this.walletService.changePin(req.user.id, dto.oldPin, dto.newPin);
   }
 
   @Post('reset-pin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Повне скидання гаманця (видалення DID та VC)' })
+  @ApiOperation({ summary: 'Reset wallet (delete DID and VC)' })
   async reset(@Request() req) {
     return this.walletService.resetWallet(req.user.id);
   }

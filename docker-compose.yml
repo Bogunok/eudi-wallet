@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # 1. База Даних
@@ -24,7 +24,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Підключення до БД 
+      # Підключення до БД
       DATABASE_URL: postgres://admin:root@db:5432/eudi_db
     depends_on:
       - db

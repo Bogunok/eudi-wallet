@@ -1,7 +1,7 @@
-import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common'; 
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; 
-import { CreateOrganizationDto } from './dto/create-organization.dto'; 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
 
 @Controller('organization')
 export class OrganizationController {

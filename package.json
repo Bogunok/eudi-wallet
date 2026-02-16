@@ -1,0 +1,24 @@
+{
+  "name": "eudi-wallet",
+  "version": "1.0.0",
+  "description": "This project is the implementation of a diploma work on the topic \"Implementation of an application according to the EU Digital Identity Wallet standard for storing Legal Entity Identifier (LEI) and Verifiable Credentials of organizations\"",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bogunok/eudi-wallet.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Bogunok/eudi-wallet/issues"
+  },
+  "homepage": "https://github.com/Bogunok/eudi-wallet#readme",
+  "devDependencies": {
+    "prettier": "3.8.1"
+  }
+}
