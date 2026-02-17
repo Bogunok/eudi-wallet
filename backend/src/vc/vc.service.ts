@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
-import { CreateCredentialDto } from './dto/create-credential.dto';
+import { CreateVerifiableCredentialDto } from './dto/create-credential.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { VerifiableCredentialStatus } from '@prisma/client';
 
@@ -14,11 +14,14 @@ import { VerifiableCredentialStatus } from '@prisma/client';
 export class VcService {
   constructor(
     private prisma: PrismaService,
-    private authService: AuthService,
+    private authService: AuthService
   ) {}
 
   // Метод видачі та збереження Verifiable Credential
-  async issueAndSaveCredential(dto: CreateCredentialDto, userId: string) {
+  async issueAndSaveCredential(
+    dto: CreateVerifiableCredentialDto,
+    userId: string
+  ) {
     // Перевірка власності організації
     const organization = await this.prisma.organization.findFirst({
       where: {
@@ -99,7 +102,7 @@ export class VcService {
   async deleteCredentialLocally(id: string) {
     return this.prisma.verifiableCredential.update({
       where: { id },
-      data: { status: VerifiableCredentialStatus.DELETED }, // Міняємо статус, щоб зберегти цілісність даних
+      data: { status: VerifiableCredentialStatus.DELETED },
     });
   }
 }

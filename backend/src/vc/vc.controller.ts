@@ -9,7 +9,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { VcService } from './vc.service';
-import { CreateCredentialDto } from './dto/create-credential.dto';
+import { CreateVerifiableCredentialDto } from './dto/create-credential.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   ApiTags,
@@ -25,25 +25,21 @@ import {
 export class VcController {
   constructor(private readonly vcService: VcService) {}
 
-  /**
-   * 1. Видача нового документа (LEI)
-   * Викликається після того, як юзер ввів PIN на сторінці "Paste link"
-   */
+  // Видача нового документа (LEI)
+  // Викликається після того, як юзер ввів PIN на сторінці "Paste link"
   @Post('issue')
   @ApiOperation({ summary: 'Видати та зберегти новий Verifiable Credential' })
   @ApiResponse({
     status: 201,
     description: 'Документ успішно створено та підписано',
   })
-  async issue(@Body() dto: CreateCredentialDto, @Request() req) {
+  async issue(@Body() dto: CreateVerifiableCredentialDto, @Request() req) {
     // req.user.id береться з JWT токена після авторизації
     return this.vcService.issueAndSaveCredential(dto, req.user.id);
   }
 
-  /**
-   * 2. Список усіх документів організації
-   * Потрібен для екрана "View all documents"
-   */
+  //Список усіх документів організації
+  //Потрібен для екрана "View all documents"
   @Get('org/:orgId')
   @ApiOperation({
     summary: 'Отримати всі активні документи конкретної організації',
@@ -52,10 +48,8 @@ export class VcController {
     return this.vcService.findAllCredentials(orgId, req.user.id);
   }
 
-  /**
-   * 3. Деталі одного документа
-   * Використовується при натисканні на картку документа
-   */
+  //Деталі одного документа
+  //Використовується при натисканні на картку документа
   @Get(':id')
   @ApiOperation({
     summary: 'Отримати детальні дані конкретного документа за ID',
@@ -64,7 +58,6 @@ export class VcController {
     return this.vcService.findCredentialById(id);
   }
 
-  // 4. Видалення документа
   @Delete(':id')
   @ApiOperation({
     summary: 'Локальне видалення документа (зміна статусу на DELETED)',

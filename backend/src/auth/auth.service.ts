@@ -5,7 +5,8 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { UsersService } from '../user/users.service';
+import { Role } from '@prisma/client';
+import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -15,24 +16,21 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    private usersService: UserService,
     private prisma: PrismaService,
     private jwtService: JwtService
   ) {}
 
   // 1. Реєстрація
   async register(dto: RegisterDto) {
-    // Перевірка чи існує користувач
     const existingUser = await this.usersService.findOneByEmail(dto.email);
     if (existingUser)
       throw new ConflictException('User with this email already exists');
 
     const salt = await bcrypt.genSalt();
-    // Хешуємо пароль і PIN
     const hashedPassword = await bcrypt.hash(dto.password, salt);
     const hashedPin = await bcrypt.hash(dto.pin, salt);
 
-    // Зберігаємо створеного користувача в константу
     const newUser = await this.prisma.user.create({
       data: {
         email: dto.email,
@@ -41,58 +39,77 @@ export class AuthService {
       },
     });
     // Одразу повертаємо токен, щоб не треба було логінитись
-    return this.generateToken(newUser.id, newUser.email, 'USER');
+    return this.generateToken(newUser.id, newUser.email, Role.HOLDER);
   }
 
-  // 2. Логін за допомогою pin
   async loginWithPin(dto: { email: string; pin: string }) {
-    // Витягуємо дані безпосередньо з DTO
     const user = await this.usersService.findOneByEmail(dto.email);
 
     if (!user) {
-      throw new UnauthorizedException('Користувача не знайдено');
+      throw new UnauthorizedException('user not found');
     }
 
-    // Перевірка чи не перевищено ліміт спроб
     if (user.pinAttempts >= 3) {
       throw new ForbiddenException(
-        'Доступ заблоковано: перевищено 3 спроби. Скиньте гаманець або спробуйте пізніше.'
+        'Access denied. Too many failed PIN attempts. Please try again later.'
       );
     }
 
     if (!user.pin) {
-      throw new BadRequestException(
-        'PIN-код для цього користувача не встановлено'
-      );
+      throw new BadRequestException('PIN-code not set for this user.');
     }
 
-    // Порівнюємо введений PIN із хешем у базі даних
     const isPinValid = await bcrypt.compare(dto.pin, user.pin);
 
     if (!isPinValid) {
-      //Збільшуємо лічильник спроб при помилці
       await this.prisma.user.update({
         where: { id: user.id },
         data: { pinAttempts: { increment: 1 } },
       });
 
-      const attemptsLeft = 2 - user.pinAttempts; // Розрахунок спроб, що залишилися
+      const attemptsLeft = 2 - user.pinAttempts;
       throw new UnauthorizedException(
-        `Невірний PIN-код. Залишилося спроб: ${attemptsLeft > 0 ? attemptsLeft : 0}`
+        `Invalid PIN code. Attempts left: ${attemptsLeft > 0 ? attemptsLeft : 0}`
       );
     }
 
-    //Якщо вхід успішний — обнуляємо лічильник
     await this.prisma.user.update({
       where: { id: user.id },
       data: { pinAttempts: 0 },
     });
 
-    return this.generateToken(user.id, user.email, 'USER');
+    return this.generateToken(user.id, user.email, user.role);
   }
 
-  // 3. Генерація JWT
-  private generateToken(userId: string, email: string, role: string) {
+  async loginWithPassword(dto: LoginDto) {
+    const user = await this.usersService.findOneByEmail(dto.email);
+
+    if (!user || !user.password) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.password as string,
+      user.password as string
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Якщо користувач успішно зайшов за паролем, ми розблоковуємо його ПІН-код
+    if (user.pinAttempts > 0) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { pinAttempts: 0 },
+      });
+    }
+
+    return this.generateToken(user.id, user.email, user.role);
+  }
+
+  // Генерація JWT
+  private generateToken(userId: string, email: string, role: Role) {
     const payload = { sub: userId, email, role };
     return {
       access_token: this.jwtService.sign(payload),

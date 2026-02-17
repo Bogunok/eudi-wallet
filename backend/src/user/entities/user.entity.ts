@@ -19,7 +19,7 @@ export class UserEntity implements User {
   password: string;
 
   @Exclude()
-  pin: string | null;
+  pin: string;
 
   @Exclude()
   pinAttempts: number;

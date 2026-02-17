@@ -5,16 +5,22 @@ import {
   Length,
   MinLength,
   IsString,
+  Matches,
 } from 'class-validator';
 import { Role } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger/dist/decorators/api-property.decorator';
 
 export class RegisterDto {
-  @IsEmail({}, { message: 'Invalid email' })
+  @ApiProperty({
+    description: 'Email address of the user',
+    example: 'user@example.com',
+  })
+  @IsEmail()
   email: string;
 
-  @IsNotEmpty()
-  @MinLength(8, { message: 'Password must contain at least 8 characters' })
+  @ApiProperty({ example: 'StrongPass123!', minLength: 8 })
+  @IsString()
+  @MinLength(8)
   password: string;
 
   @ApiProperty({
@@ -22,7 +28,8 @@ export class RegisterDto {
     example: '1111',
   })
   @IsString()
-  @Length(4, 4)
+  @Length(4, 4, { message: 'PIN must be exactly 4 digits long' })
+  @Matches(/^[0-9]+$/, { message: 'PIN must contain only digits' })
   pin: string;
 
   @IsEnum(Role, { message: 'Role must be HOLDER, ISSUER or VERIFIER' })

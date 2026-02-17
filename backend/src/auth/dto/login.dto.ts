@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Length } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger/dist/decorators/api-property.decorator';
 
 export class LoginDto {
@@ -12,4 +12,12 @@ export class LoginDto {
   @IsString()
   @Length(4, 4, { message: 'PIN must be exactly 4 digits long' })
   pin: string;
+
+  @ApiProperty({
+    description: 'Password',
+    example: 'Password123!',
+  })
+  @IsString()
+  @IsNotEmpty()
+  password?: string;
 }

@@ -31,7 +31,7 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique
   password     String // Хеш пароля
-  pin          String? // Хеш PIN-коду
+  pin          String // Хеш PIN-коду
   pinAttempts  Int      @default(0) // Лічильник спроб
   role         Role     @default(HOLDER)
   createdAt    DateTime @default(now())
