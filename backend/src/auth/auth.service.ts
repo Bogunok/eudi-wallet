@@ -16,42 +16,31 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UserService,
+    private userService: UserService,
     private prisma: PrismaService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
   ) {}
 
   // 1. Реєстрація
   async register(dto: RegisterDto) {
-    const existingUser = await this.usersService.findOneByEmail(dto.email);
-    if (existingUser)
-      throw new ConflictException('User with this email already exists');
-
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(dto.password, salt);
-    const hashedPin = await bcrypt.hash(dto.pin, salt);
-
-    const newUser = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashedPassword,
-        pin: hashedPin,
-      },
+    const newUser = await this.userService.create({
+      ...dto,
+      role: Role.HOLDER,
     });
     // Одразу повертаємо токен, щоб не треба було логінитись
-    return this.generateToken(newUser.id, newUser.email, Role.HOLDER);
+    return this.generateToken(newUser.id, newUser.email, newUser.role);
   }
 
   async loginWithPin(dto: { email: string; pin: string }) {
-    const user = await this.usersService.findOneByEmail(dto.email);
+    const user = await this.userService.findOneByEmail(dto.email);
 
-    if (!user) {
+    if (!user || !user.pin) {
       throw new UnauthorizedException('user not found');
     }
 
     if (user.pinAttempts >= 3) {
       throw new ForbiddenException(
-        'Access denied. Too many failed PIN attempts. Please try again later.'
+        'Access denied. Too many failed PIN attempts. Please try again later.',
       );
     }
 
@@ -69,7 +58,7 @@ export class AuthService {
 
       const attemptsLeft = 2 - user.pinAttempts;
       throw new UnauthorizedException(
-        `Invalid PIN code. Attempts left: ${attemptsLeft > 0 ? attemptsLeft : 0}`
+        `Invalid PIN code. Attempts left: ${attemptsLeft > 0 ? attemptsLeft : 0}`,
       );
     }
 
@@ -82,16 +71,13 @@ export class AuthService {
   }
 
   async loginWithPassword(dto: LoginDto) {
-    const user = await this.usersService.findOneByEmail(dto.email);
+    const user = await this.userService.findOneByEmail(dto.email);
 
     if (!user || !user.password) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      dto.password as string,
-      user.password as string
-    );
+    const isPasswordValid = await bcrypt.compare(dto.password as string, user.password as string);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');

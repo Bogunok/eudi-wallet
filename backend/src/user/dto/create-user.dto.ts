@@ -1,10 +1,4 @@
-import {
-  IsEmail,
-  IsString,
-  MinLength,
-  IsEnum,
-  IsOptional,
-} from 'class-validator';
+import { IsEmail, IsString, MinLength, IsEnum, IsOptional, Length, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
@@ -34,4 +28,13 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  @ApiProperty({
+    description: 'PIN code for the new user (exactly 4 digits)',
+    example: '1234',
+  })
+  @IsString()
+  @Length(4, 4)
+  @Matches(/^[0-9]+$/, { message: 'PIN code must contain only numbers' })
+  pin: string;
 }
