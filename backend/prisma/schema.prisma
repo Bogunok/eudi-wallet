@@ -53,9 +53,9 @@ model User {
 model DidDocument {
   id                  String  @id @default(uuid())
   did                 String  @unique // Сам рядок DID
-  method              String // 'key', 'ebsi', 'web'
+  method              String // 'web'
   keyId               String? // ID ключа у документі (наприклад, #key-1), потрібно для підпису
-  publicKey           String // публічний ключ для перевірки підписів
+  publicKey           Json // публічний ключ для перевірки підписів
   encryptedPrivateKey String // зашифрований приватний ключ
   encryptionSalt      String
   encryptionIv        String // Вектор ініціалізації (IV) для AES-GCM

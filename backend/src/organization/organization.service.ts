@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { DidService } from 'src/did/did.service';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private didService: DidService,
+  ) {}
 
   async create(dto: CreateOrganizationDto, userId: string) {
     return this.prisma.organization.create({
@@ -15,5 +19,12 @@ export class OrganizationService {
         userId: userId,
       },
     });
+  }
+
+  // Метод для налаштування DID документа організації
+  async setupOrganizationDid(userId: string, pin: string, domain: string) {
+    const savedDidDocument = await this.didService.generateDidWebData(userId, pin, domain);
+
+    return savedDidDocument;
   }
 }

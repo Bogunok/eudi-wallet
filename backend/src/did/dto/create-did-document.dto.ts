@@ -1,11 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsObject, Equals } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-export enum DidMethod {
-  KEY = 'key',
-  EBSI = 'ebsi',
-  WEB = 'web',
-}
 
 export class CreateDidDocumentDto {
   @ApiProperty({
@@ -17,12 +11,12 @@ export class CreateDidDocumentDto {
   did: string;
 
   @ApiProperty({
-    description: 'The DID method, e.g. key, ebsi, web',
-    enum: DidMethod,
-    example: DidMethod.KEY,
+    description: 'The DID method',
+    example: 'web',
   })
-  @IsEnum(DidMethod)
-  method: DidMethod;
+  @IsString()
+  @Equals('web', { message: 'Only "web" method is supported for organizations' })
+  method: string;
 
   @ApiPropertyOptional({
     description: 'Optional key ID within the DID document, e.g. #key-1',
@@ -33,12 +27,17 @@ export class CreateDidDocumentDto {
   keyId?: string;
 
   @ApiProperty({
-    description: 'Public key in Multibase/Hex format',
-    example: 'z6MkhaXgBZDvotDkL5...',
+    description: 'Public key material associated with the DID',
+    example: {
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPzAURo',
+      kid: 'did:web:company.com#key-1',
+    },
   })
-  @IsString()
+  @IsObject()
   @IsNotEmpty()
-  publicKey: string;
+  publicKey: Record<string, any>;
 
   @ApiProperty({
     description: 'Private key, encrypted with user password',
