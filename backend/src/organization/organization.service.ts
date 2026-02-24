@@ -23,8 +23,6 @@ export class OrganizationService {
 
   // Метод для налаштування DID документа організації
   async setupOrganizationDid(userId: string, pin: string, domain: string) {
-    const savedDidDocument = await this.didService.generateDidWebData(userId, pin, domain);
-
-    return savedDidDocument;
+    return await this.didService.generateDidWebData(userId, pin, domain);
   }
 }

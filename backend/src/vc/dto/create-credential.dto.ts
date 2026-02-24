@@ -1,30 +1,22 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsUUID,
-  IsObject,
-  IsArray,
-  IsOptional,
-  IsEnum,
-  IsDateString,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsUUID, IsObject, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { VerifiableCredentialStatus } from '@prisma/client';
 
 export class CreateVerifiableCredentialDto {
-  @ApiProperty({
-    example: ['VerifiableCredential', 'LegalEntity'],
+  @ApiPropertyOptional({
+    description: 'Optional organization link',
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  @IsArray()
-  @IsString({ each: true })
-  type: string[];
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 
   @ApiProperty({
-    example: 'did:key:z6MkhaX...',
+    description: 'The PIN for decrypting the private key of the issuer DID document',
+    example: '1234',
   })
   @IsString()
   @IsNotEmpty()
-  issuerDid: string;
+  pin: string;
 
   @ApiProperty({
     description:
@@ -35,60 +27,21 @@ export class CreateVerifiableCredentialDto {
   @IsNotEmpty()
   subjectDid: string;
 
+  @ApiProperty({ description: 'ID of schema from VerifiableCredentialSchema' })
+  @IsString()
+  @IsNotEmpty()
+  schemaId: string;
+
   @ApiProperty({
     description:
-      'The actual claims/data of the credential, e.g. company name, tax ID, etc.',
+      'The actual data of the credential, which will be included in the credentialSubject.',
     example: {
-      name: 'Company Name',
-      taxId: '12345678',
+      degree: 'Bachelor',
+      university: 'KNU',
+      year: 2026,
     },
   })
   @IsObject()
-  payload: any;
-
-  @ApiProperty({
-    description: 'The signed JWT/SD-JWT string',
-  })
-  @IsString()
   @IsNotEmpty()
-  rawJwt: string;
-
-  @ApiPropertyOptional({
-    enum: VerifiableCredentialStatus,
-    example: VerifiableCredentialStatus.ACTIVE,
-  })
-  @IsOptional()
-  @IsEnum(VerifiableCredentialStatus)
-  status?: VerifiableCredentialStatus;
-
-  @ApiProperty({
-    description: 'Issuance date of the credential',
-    example: '2026-02-11T10:00:00Z',
-  })
-  @IsDateString()
-  issuedAt: string;
-
-  @ApiPropertyOptional({
-    description: 'Expiration date of the credential',
-    example: '2027-02-11T10:00:00Z',
-  })
-  @IsOptional()
-  @IsDateString()
-  expiresAt?: string;
-
-  @ApiProperty({
-    description: 'ID of the user who owns the wallet',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  userId: string;
-
-  @ApiPropertyOptional({
-    description: 'Optional organization link',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  @IsOptional()
-  @IsUUID()
-  organizationId?: string;
+  credentialData: any;
 }

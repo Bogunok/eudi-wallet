@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -35,7 +40,7 @@ export class DidService {
         encryptedPrivateKey: encryptedData.encryptedText,
         encryptionSalt: encryptedData.salt,
         encryptionIv: encryptedData.iv,
-        user: { connect: { id: 'userId' } },
+        userId: userId,
       },
     });
     return savedDidDocument;
@@ -92,5 +97,75 @@ export class DidService {
     } catch (error) {
       throw new Error('Unauthorized: Invalid PIN or corrupted key data');
     }
+  }
+
+  //Отримання публічного DID-документа
+  async resolveDid(did: string) {
+    const didDoc = await this.prisma.didDocument.findUnique({
+      where: { did },
+    });
+
+    if (!didDoc) {
+      throw new NotFoundException(`DID Document ${did} not found`);
+    }
+
+    const resolvedDocument: any = {
+      '@context': [
+        'https://www.w3.org/ns/did/v1',
+        'https://w3id.org/security/suites/jws-2020/v1', // Контекст для JSON Web Keys
+      ],
+      id: didDoc.did,
+      verificationMethod: [
+        {
+          id: didDoc.keyId,
+          type: 'JsonWebKey2020',
+          controller: didDoc.did,
+          publicKeyJwk: didDoc.publicKey,
+        },
+      ],
+      // може використовуватися для аутентифікації та підписів
+      authentication: [didDoc.keyId],
+      assertionMethod: [didDoc.keyId],
+    };
+
+    const documentMetadata = {
+      created: didDoc.createdAt,
+      deactivated: !!didDoc.deactivatedAt,
+    };
+
+    return {
+      didDocument: resolvedDocument,
+      didDocumentMetadata: documentMetadata,
+    };
+  }
+
+  //Деактивація DID документа. встановлюємо час деактивації. тільки власник може деактивувати свій DID,
+  //і він не може бути використаний для аутентифікації чи підписів після деактивації.
+  async deactivateDid(did: string, userId: string) {
+    const didDoc = await this.prisma.didDocument.findUnique({
+      where: { did },
+    });
+
+    if (!didDoc) {
+      throw new NotFoundException(`DID Document ${did} not found`);
+    }
+
+    if (didDoc.userId !== userId) {
+      throw new ForbiddenException('You do not have permission to deactivate this DID');
+    }
+
+    if (didDoc.deactivatedAt) {
+      throw new BadRequestException('This DID is already deactivated');
+    }
+
+    const updatedDoc = await this.prisma.didDocument.update({
+      where: { did },
+      data: { deactivatedAt: new Date() },
+    });
+
+    return {
+      message: `DID ${did} successfully deactivated`,
+      deactivatedAt: updatedDoc.deactivatedAt,
+    };
   }
 }

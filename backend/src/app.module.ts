@@ -10,6 +10,7 @@ import { VcModule } from './vc/vc.module';
 import { UserModule } from './user/user.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { APP_GUARD } from '@nestjs/core';
+import { SchemaModule } from './schema/schema.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { APP_GUARD } from '@nestjs/core';
     OrganizationModule,
     CommonModule,
     VcModule,
+    SchemaModule,
   ],
   controllers: [AppController],
   providers: [

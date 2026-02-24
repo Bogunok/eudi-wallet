@@ -63,6 +63,7 @@ model DidDocument {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+  deactivatedAt       DateTime?
 }
 
 model VerifiableCredential {

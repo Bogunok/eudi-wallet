@@ -4,7 +4,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class CreateDidDocumentDto {
   @ApiProperty({
     description: 'The full DID string',
-    example: 'did:key:z6MkhaXgBZDvotDkL5...',
+    example: 'did:web:z6MkhaXgBZDvotDkL5...',
   })
   @IsString()
   @IsNotEmpty()
