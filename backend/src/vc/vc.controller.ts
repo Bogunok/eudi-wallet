@@ -26,60 +26,53 @@ import {
 } from '@nestjs/swagger';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RequestCredentialDto } from './dto/request-credential.dto';
 
-@ApiTags('Verifiable Credentials')
+@ApiTags('Verifiable Credentials (Wallet)')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('vc')
 export class VcController {
   constructor(private readonly vcService: VcService) {}
 
-  // Видача нового документа (LEI)
-  // Викликається після того, як юзер ввів PIN на сторінці "Paste link"
-  @Roles('ISSUER')
-  @ApiOperation({ summary: 'Issue and save a new Verifiable Credential' })
-  @ApiParam({
-    name: 'organizationId',
-    description: 'ID of the organization for which the credential is issued',
-  })
-  @ApiResponse({ description: 'Verifiable Credential issued and saved successfully.' })
-  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
-  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
-  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Post('issue')
-  async issue(@Body() dto: CreateVerifiableCredentialDto, @Req() req) {
-    return this.vcService.issueAndSaveCredential(dto, req.user.id);
-  }
-
   //Список усіх документів організації
-  //Потрібен для екрана "View all documents"
-  @Roles('ISSUER')
+  @Roles('HOLDER')
   @ApiOperation({ summary: 'Get all active Verifiable Credentials for a specific organization' })
-  @ApiParam({ name: 'organizationId', description: 'ID of the organization' })
+  @ApiParam({ name: 'orgId', description: 'ID of the organization (Holder)' })
   @ApiResponse({ description: 'List of active Verifiable Credentials retrieved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
   @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Get('org/:orgId')
-  async findAll(@Param('orgId') orgId: string, @Req() req) {
+  async getAllCredentials(@Param('orgId') orgId: string, @Req() req) {
     return this.vcService.findAllCredentials(orgId, req.user.id);
   }
 
   //Деталі одного документа
-  //Використовується при натисканні на картку документа
-  @Roles('HOLDER','ISSUER')
+  @Roles('HOLDER')
   @ApiOperation({ summary: 'Get verifiable credential by ID' })
   @ApiParam({ name: 'id', description: 'ID of the Verifiable Credential' })
   @ApiResponse({ description: 'Verifiable Credential retrieved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
+  @ApiNotFoundResponse({ description: 'The document with the requested id was not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Get(':id')
-  async findOne(@Param('id') id: string, @Req() req: any) {
+  async getCredentialDetails(@Param('id') id: string, @Req() req: any) {
     return this.vcService.findCredentialById(id, req.user.id);
+  }
+
+  @Roles('HOLDER')
+  @ApiOperation({ summary: 'Request Verifiable Credential from Issuer' })
+  @ApiResponse({ description: 'Verifiable Credential requested successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'Schema or Issuer not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Post('request')
+  async requestCredential(@Body() dto: RequestCredentialDto, @Req() req: any) {
+    return this.vcService.requestCredentialFromIssuer(dto, req.user.id);
   }
 
   @Roles('HOLDER')
@@ -87,25 +80,10 @@ export class VcController {
   @ApiResponse({ description: 'Document successfully deleted locally' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
+  @ApiNotFoundResponse({ description: 'The document was not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Delete(':id')
   async remove(@Param('id') id: string, @Req() req: any) {
     return this.vcService.deleteCredentialLocally(id, req.user.id);
-  }
-
-   @Roles('ISSUER')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Revoke VC (only for the issuer)' })
-  @ApiParam({ name: 'id', description: 'ID Verifiable Credential' })
-  @ApiResponse({ description: 'Document successfully revoked' })
-  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
-  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
-  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Patch(':id/revoke')
-  async revokeCredential(@Param('id') id: string, @Req() req: any) {
-    // req.user.id - це ID організації, яка робить запит
-    return await this.vcService.revokeCredential(id, req.user.id);
   }
 }

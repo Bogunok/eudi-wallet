@@ -3,7 +3,7 @@ import { IsString, IsNotEmpty, IsObject } from 'class-validator';
 
 export class CreateSchemaDto {
   @ApiProperty({
-    description: 'Name of the schema (e.g., BachelorDegree, LegalEntityIdentifier)',
+    description: 'Name of the schema',
     example: 'LegalEntityIdentifier',
   })
   @IsString()

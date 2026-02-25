@@ -11,6 +11,7 @@ import { UserModule } from './user/user.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { SchemaModule } from './schema/schema.module';
+import { IssuerModule } from './issuer/issuer.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SchemaModule } from './schema/schema.module';
     CommonModule,
     VcModule,
     SchemaModule,
+    IssuerModule,
   ],
   controllers: [AppController],
   providers: [

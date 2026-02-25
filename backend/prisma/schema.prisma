@@ -14,6 +14,12 @@ enum Role {
   ADMIN
 }
 
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum VerifiableCredentialStatus {
   ACTIVE
   REVOKED
@@ -48,6 +54,9 @@ model User {
 
   schemas              VerifiableCredentialSchema[] // Для Issuer: шаблон документів, які він створив
   verificationSessions VerificationSession[] // Для Verifier: сесії перевірки
+
+  sentRequests VerifiableCredentialRequest[] @relation("HolderRequests")
+  receivedRequests VerifiableCredentialRequest[] @relation("IssuerRequests")
 }
 
 model DidDocument {
@@ -85,6 +94,20 @@ model VerifiableCredential {
   createdAt      DateTime                   @default(now())
 }
 
+model VerifiableCredentialRequest {
+  id          String   @id @default(uuid())
+  holderId    String
+  holder      User     @relation("HolderRequests", fields: [holderId], references: [id])
+  issuerId    String
+  issuer      User     @relation("IssuerRequests", fields: [issuerId], references: [id])
+  schemaId    String
+  schema      VerifiableCredentialSchema @relation(fields: [schemaId], references: [id])
+  claimData   Json
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model Organization {
   id      String @id @default(uuid())
   lei     String @unique // LEI код організації
@@ -110,6 +133,8 @@ model VerifiableCredentialSchema {
 
   issuerId String
   issuer   User   @relation(fields: [issuerId], references: [id])
+
+  verifiableCredentialRequests VerifiableCredentialRequest[]
 }
 
 // Verification Session для верифікатора
