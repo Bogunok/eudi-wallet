@@ -11,6 +11,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class DidService {
   constructor(private prisma: PrismaService) {}
 
+  private readonly PEPPER = process.env.ENCRYPTION_PEPPER;
   private readonly ALGORITHM = 'aes-256-gcm';
   private readonly SCRYPT_KEY_LEN = 32; // 32 байти = 256 біт для ключа AES
 
@@ -47,10 +48,10 @@ export class DidService {
   }
 
   //Шифрує приватний ключ за допомогою PIN-коду користувача
-  private async encryptWithPin(text: string, pin: string) {
+  async encryptWithPin(text: string, pin: string) {
     const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(12);
-    const key = crypto.scryptSync(pin, salt, this.SCRYPT_KEY_LEN);
+    const key = crypto.scryptSync(pin + this.PEPPER, salt, this.SCRYPT_KEY_LEN);
 
     const cipher = crypto.createCipheriv(this.ALGORITHM, key, iv);
 
@@ -76,7 +77,7 @@ export class DidService {
       const salt = Buffer.from(saltBase64, 'base64');
       const iv = Buffer.from(ivBase64, 'base64');
 
-      const key = crypto.scryptSync(pin, salt, this.SCRYPT_KEY_LEN);
+      const key = crypto.scryptSync(pin + this.PEPPER, salt, this.SCRYPT_KEY_LEN);
 
       const [encryptedText, authTagBase64] = encryptedDataWithTag.split(':');
 

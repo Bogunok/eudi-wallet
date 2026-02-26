@@ -3,45 +3,82 @@ import {
   Post,
   Get,
   UseGuards,
-  Request,
   Body,
   HttpCode,
   HttpStatus,
   Patch,
+  Req,
 } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiOperation } from '@nestjs/swagger/dist/decorators/api-operation.decorator';
 import { ChangePinDto } from './dto/change-pin.dto';
+import {
+  ApiBearerAuth,
+  ApiResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
 
+@ApiTags('Wallet')
 @Controller('wallet')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth()
 export class WalletController {
   authService: any;
   constructor(private readonly walletService: WalletService) {}
 
+  @Roles('HOLDER')
+  @ApiOperation({ summary: 'Create a new DID for the user (requires PIN)' })
+  @ApiResponse({ status: 201, description: 'DID created successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'DID not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Post('create-did')
-  createDid(@Request() req) {
-    // З токена дістаємо ID користувача (req.user.id)
-    // Це гарантує, що ми створюємо DID саме для того, хто залогінився
-    return this.walletService.createDid(req.user.id);
+  async createDid(@Req() req, @Body('pin') pin: string) {
+    return this.walletService.createDid(req.user.id, pin);
   }
 
+  @Roles('HOLDER')
+  @ApiOperation({ summary: 'Get all user DIDs' })
+  @ApiResponse({ status: 200, description: 'DID retrieved successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'DID not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Get('dids')
-  getMyDids(@Request() req) {
+  getMyDids(@Req() req) {
     return this.walletService.getMyDids(req.user.id);
   }
 
-  @Patch('change-pin')
+  @Roles('HOLDER')
   @ApiOperation({ summary: 'Change wallet PIN code' })
-  async updatePin(@Request() req, @Body() dto: ChangePinDto) {
+  @ApiResponse({ status: 200, description: 'PIN changed successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'PIN not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Patch('change-pin')
+  async updatePin(@Req() req, @Body() dto: ChangePinDto) {
     return this.walletService.changePin(req.user.id, dto.oldPin, dto.newPin);
   }
 
-  @Post('reset-pin')
-  @HttpCode(HttpStatus.OK)
+  @Roles('HOLDER')
   @ApiOperation({ summary: 'Reset wallet (delete DID and VC)' })
-  async reset(@Request() req) {
+  @ApiResponse({ status: 200, description: 'Wallet reset successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'Wallet not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-wallet')
+  async reset(@Req() req) {
     return this.walletService.resetWallet(req.user.id);
   }
 }
