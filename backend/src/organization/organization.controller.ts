@@ -26,7 +26,7 @@ export class OrganizationController {
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Post()
+  @Post('create')
   async create(@Body() dto: CreateOrganizationDto, @Req() req: any) {
     return this.organizationService.create(dto, req.user.id);
   }

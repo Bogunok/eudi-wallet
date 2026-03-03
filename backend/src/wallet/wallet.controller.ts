@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiResponse,
   ApiTags,
+  ApiBody,
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -33,13 +34,19 @@ export class WalletController {
   authService: any;
   constructor(private readonly walletService: WalletService) {}
 
-  @Roles('HOLDER')
+  @Roles('HOLDER', 'VERIFIER', 'ISSUER')
   @ApiOperation({ summary: 'Create a new DID for the user (requires PIN)' })
   @ApiResponse({ status: 201, description: 'DID created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
   @ApiNotFoundResponse({ description: 'DID not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { pin: { type: 'string', example: '1111' } },
+    },
+  })
   @Post('create-did')
   async createDid(@Req() req, @Body('pin') pin: string) {
     return this.walletService.createDid(req.user.id, pin);

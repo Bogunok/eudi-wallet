@@ -21,53 +21,71 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // 1. Реєстрація
+  async getTokens(userId: string, email: string, role: string) {
+    const payload = { sub: userId, email, role };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_SECRET,
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '7d',
+      }),
+    ]);
+
+    return { accessToken, refreshToken };
+  }
+
+  async updateRefreshTokenHash(userId: string, refreshToken: string) {
+    const salt = await bcrypt.genSalt();
+    const hash = await bcrypt.hash(refreshToken, salt);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshToken: hash },
+    });
+  }
+
+  async refreshTokens(refreshToken: string) {
+    // Тут ми розкодовуємо токен, щоб знайти userId
+    let payload;
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+    } catch (e) {
+      throw new ForbiddenException('Invalid Refresh Token');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+
+    if (!user || !user.refreshToken) {
+      throw new ForbiddenException('Access Denied');
+    }
+
+    const refreshTokenMatches = await bcrypt.compare(refreshToken, user.refreshToken);
+    if (!refreshTokenMatches) {
+      throw new ForbiddenException('Access Denied');
+    }
+
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
+
+    return tokens;
+  }
+
   async register(dto: RegisterDto) {
     const newUser = await this.userService.create({
       ...dto,
-      role: Role.HOLDER,
-    });
-    // Одразу повертаємо токен, щоб не треба було логінитись
-    return this.generateToken(newUser.id, newUser.email, newUser.role);
-  }
-
-  async loginWithPin(dto: { email: string; pin: string }) {
-    const user = await this.userService.findOneByEmail(dto.email);
-
-    if (!user || !user.pin) {
-      throw new UnauthorizedException('user not found');
-    }
-
-    if (user.pinAttempts >= 3) {
-      throw new ForbiddenException(
-        'Access denied. Too many failed PIN attempts. Please try again later.',
-      );
-    }
-
-    if (!user.pin) {
-      throw new BadRequestException('PIN-code not set for this user.');
-    }
-
-    const isPinValid = await bcrypt.compare(dto.pin, user.pin);
-
-    if (!isPinValid) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { pinAttempts: { increment: 1 } },
-      });
-
-      const attemptsLeft = 2 - user.pinAttempts;
-      throw new UnauthorizedException(
-        `Invalid PIN code. Attempts left: ${attemptsLeft > 0 ? attemptsLeft : 0}`,
-      );
-    }
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { pinAttempts: 0 },
+      role: dto.role || Role.HOLDER,
     });
 
-    return this.generateToken(user.id, user.email, user.role);
+    const tokens = await this.getTokens(newUser.id, newUser.email, newUser.role);
+    await this.updateRefreshTokenHash(newUser.id, tokens.refreshToken);
+
+    return tokens; //{ accessToken, refreshToken }
   }
 
   async loginWithPassword(dto: LoginDto) {
@@ -91,15 +109,16 @@ export class AuthService {
       });
     }
 
-    return this.generateToken(user.id, user.email, user.role);
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
+
+    return tokens;
   }
 
-  // Генерація JWT
-  private generateToken(userId: string, email: string, role: Role) {
-    const payload = { sub: userId, email, role };
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: { id: userId, email, role },
-    };
+  async logout(userId: string) {
+    await this.prisma.user.updateMany({
+      where: { id: userId, refreshToken: { not: null } },
+      data: { refreshToken: null },
+    });
   }
 }

@@ -16,7 +16,7 @@ import { SchemaService } from './schema.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
 
 @ApiTags('Credential Schemas')
-@Controller('schemas')
+@Controller('schema')
 export class SchemaController {
   constructor(private readonly schemaService: SchemaService) {}
 
