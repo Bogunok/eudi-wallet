@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { SchemaModule } from './schema/schema.module';
 import { IssuerModule } from './issuer/issuer.module';
+import { VerifierModule } from './verifier/verifier.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { IssuerModule } from './issuer/issuer.module';
     VcModule,
     SchemaModule,
     IssuerModule,
+    VerifierModule,
   ],
   controllers: [AppController],
   providers: [

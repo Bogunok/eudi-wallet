@@ -77,44 +77,64 @@ export class IssuerService {
 
     const subjectDid = holderDidDoc.did;
 
-    const vcPayload = {
-      '@context': ['https://www.w3.org/2018/credentials/v1'],
-      type: ['VerifiableCredential', request.schema.name],
-      credentialSchema: { id: request.schema.schemaId, type: 'JsonSchemaValidator2018' },
-      credentialSubject: {
-        id: subjectDid,
-        ...(request.claimData as any),
-      },
+    const encodeBase64Url = (str: string | Buffer) => {
+      return (typeof str === 'string' ? Buffer.from(str) : str)
+        .toString('base64url')
+        .replace(/=/g, '');
     };
 
-    // Підписуємо JWT
-    const jwtHeader = { alg: 'EdDSA', typ: 'JWT', kid: issuerDidDoc.keyId };
+    const disclosures: string[] = []; // розкриті дані у Base64Url
+    const sdHashes: string[] = []; //  хеші, які покладемо в JWT
+
+    // Проходимося по всіх даних, які ми хочемо зробити прихованими
+    for (const [key, value] of Object.entries(request.claimData as any)) {
+      const salt = crypto.randomBytes(16).toString('base64url').replace(/=/g, '');
+
+      const disclosureArray = [salt, key, value];
+      const disclosureString = JSON.stringify(disclosureArray);
+
+      const disclosureB64url = encodeBase64Url(disclosureString);
+      disclosures.push(disclosureB64url);
+
+      const hash = crypto.createHash('sha256').update(disclosureString).digest();
+      const hashB64url = encodeBase64Url(hash);
+      sdHashes.push(hashB64url);
+    }
+
     const jwtPayload = {
       iss: issuerDidDoc.did,
       sub: subjectDid,
       iat: Math.floor(Date.now() / 1000),
-      vc: vcPayload,
+      vct: request.schema.name, // Тип документа
+      _sd: sdHashes, // Масив хешів прихованих полів
+      _sd_alg: 'sha-256',
     };
 
-    const encodeBase64Url = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-    const unsignedToken = `${encodeBase64Url(jwtHeader)}.${encodeBase64Url(jwtPayload)}`;
+    const jwtHeader = { alg: 'EdDSA', typ: 'vc+sd-jwt', kid: issuerDidDoc.keyId };
+
+    const unsignedToken = `${encodeBase64Url(JSON.stringify(jwtHeader))}.${encodeBase64Url(JSON.stringify(jwtPayload))}`;
 
     const privateKeyObj = crypto.createPrivateKey({
       key: Buffer.from(decryptedPrivateKeyBase64, 'base64'),
       format: 'der',
       type: 'pkcs8',
     });
-    const signature = crypto.sign(null, Buffer.from(unsignedToken), privateKeyObj);
-    const rawJwt = `${unsignedToken}.${signature.toString('base64url')}`;
 
-    //Зберігаємо виданий документ у БД
+    const signature = crypto.sign(null, Buffer.from(unsignedToken), privateKeyObj);
+    const signedJwt = `${unsignedToken}.${encodeBase64Url(signature)}`;
+
+    // ФІНАЛЬНИЙ SD-JWT
+    // Формат: <signed_jwt>~<disclosure_1>~<disclosure_2>~
+    // (Остання тильда обов'язкова, вона показує, що поки немає прив'язки до ключа - Key Binding)
+    const sdJwtToken = `${signedJwt}~${disclosures.join('~')}~`;
+
     const issuedCredential = await this.prisma.verifiableCredential.create({
       data: {
         type: ['VerifiableCredential', request.schema.name],
         issuerDid: issuerDidDoc.did,
         subjectDid: subjectDid,
-        payload: vcPayload,
-        rawJwt: rawJwt,
+        payload: jwtPayload,
+        rawJwt: sdJwtToken,
         issuedAt: new Date(),
         status: VerifiableCredentialStatus.ACTIVE,
         userId: request.holderId,
@@ -128,7 +148,7 @@ export class IssuerService {
     });
 
     return {
-      message: 'Document issued successfully!',
+      message: 'SD-JWT Credential issued successfully!',
       credentialId: issuedCredential.id,
     };
   }

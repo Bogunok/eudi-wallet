@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { PresentCredentialDto } from './dto/present-credential.dto';
 
 @ApiTags('Wallet')
 @Controller('wallet')
@@ -87,5 +88,24 @@ export class WalletController {
   @Post('reset-wallet')
   async reset(@Req() req) {
     return this.walletService.resetWallet(req.user.id);
+  }
+
+  @Roles('HOLDER')
+  @ApiOperation({ summary: 'Present a Verifiable Credential to a Verifier (Selective Disclosure)' })
+  @ApiResponse({ status: 200, description: 'Credential successfully presented to the verifier.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'Credential or Session not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Post('present-credential')
+  async presentCredential(@Req() req, @Body() dto: PresentCredentialDto) {
+    const userId = req.user.id;
+
+    return this.walletService.presentCredentialToVerifier(
+      userId,
+      dto.credentialId,
+      dto.sessionId,
+      dto.discloseClaims,
+    );
   }
 }

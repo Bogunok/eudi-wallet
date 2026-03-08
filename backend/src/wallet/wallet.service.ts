@@ -2,21 +2,28 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { v4 as uuidv4 } from 'uuid'; // Можливо доведеться зробити npm i uuid
+import { HttpService } from '@nestjs/axios';
+import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from 'src/auth/auth.service';
 import { DidService } from 'src/did/did.service';
 import * as bcrypt from 'bcrypt';
+import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     private prisma: PrismaService,
     private authService: AuthService,
     private didService: DidService,
+    private readonly httpService: HttpService,
   ) {}
 
   // Метод створення DID для конкретного користувача
@@ -44,7 +51,6 @@ export class WalletService {
     });
   }
 
-  //Скидання гаманця (Reset wallet)
   async resetWallet(userId: string) {
     // Видаляємо всі DID та документи користувача, але залишаємо акаунт
     return this.prisma.$transaction([
@@ -104,5 +110,89 @@ export class WalletService {
       where: { id: userId },
       data: { pin: hashedPin, pinAttempts: 0 },
     });
+  }
+
+  //Обрізає SD-JWT, залишаючи тільки ті поля, які дозволив користувач, і відправляє результат Верифікатору.
+  async presentCredentialToVerifier(
+    userId: string,
+    credentialId: string,
+    sessionId: string,
+    allowedClaims: string[],
+  ) {
+    const credential = await this.prisma.verifiableCredential.findFirst({
+      where: { id: credentialId, userId: userId },
+    });
+
+    if (!credential) {
+      throw new NotFoundException('Verifiable Credential not found in your wallet');
+    }
+
+    // повний SD-JWT з усіма даними
+    const rawSdJwt = credential.rawJwt;
+
+    // Selective Disclosure
+    const parts = rawSdJwt.split('~');
+    const signedJwt = parts[0];
+    const disclosures = parts.slice(1).filter(part => part.length > 0);
+
+    const keptDisclosures: string[] = [];
+
+    // Перебираємо всі прикріплені дані
+    for (const disclosureB64url of disclosures) {
+      try {
+        const decodedString = Buffer.from(disclosureB64url, 'base64url').toString('utf-8');
+        const parsedDisclosure = JSON.parse(decodedString);
+
+        if (Array.isArray(parsedDisclosure) && parsedDisclosure.length === 3) {
+          const claimName = parsedDisclosure[1];
+
+          if (allowedClaims.includes(claimName)) {
+            keptDisclosures.push(disclosureB64url);
+          }
+        }
+      } catch (error) {
+        this.logger.warn('Failed to parse a disclosure segment');
+      }
+    }
+
+    // Склеюємо назад підписаний JWT + тільки дозволені розкриття + обов'язкова тильда в кінці
+    const croppedSdJwt = `${signedJwt}~${keptDisclosures.join('~')}~`;
+
+    const presentationSubmission = {
+      id: crypto.randomUUID(),
+      definition_id: `pd_${sessionId}`, // ID запиту, який генерував Верифікатор
+      descriptor_map: [
+        {
+          id: `${credential.type[1].toLowerCase()}_descriptor`,
+          format: 'vc+sd-jwt',
+          path: '$',
+        },
+      ],
+    };
+
+    // HTTP Запит до Верифікатора
+    try {
+      const verifierUrl = `http://localhost:3000/api/verifier/response/${sessionId}`;
+
+      const payload = {
+        vp_token: croppedSdJwt,
+        presentation_submission: presentationSubmission,
+      };
+
+      const response = await lastValueFrom(this.httpService.post(verifierUrl, payload));
+
+      return {
+        message: 'Presentation successfully submitted to the Verifier',
+        verifierResponse: response.data,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send presentation to verifier: ${error.message}`);
+      if (error.response) {
+        throw new InternalServerErrorException(
+          `Verifier rejected the presentation: ${error.response.data?.message || error.message}`,
+        );
+      }
+      throw new InternalServerErrorException('Network error: Could not reach the Verifier');
+    }
   }
 }
