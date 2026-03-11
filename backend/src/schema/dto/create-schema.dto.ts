@@ -19,14 +19,26 @@ export class CreateSchemaDto {
   schemaId: string;
 
   @ApiProperty({
-    description: 'JSON structure of fields that will be in this document',
+    description:
+      'The structure of the credential, defining field types, UI labels, and descriptions.',
     example: {
-      leiCode: 'string',
-      companyName: 'string',
-      country: 'string',
+      leiCode: {
+        type: 'string',
+        label: 'LEI Code',
+        description: 'The 20-character global Legal Entity Identifier',
+      },
+      companyName: {
+        type: 'string',
+        label: 'Company Name',
+        description: 'The official registered name of the organization',
+      },
+      country: {
+        type: 'string',
+        label: 'Country of Registration',
+      },
     },
   })
   @IsObject()
   @IsNotEmpty()
-  structure: any;
+  structure: Record<string, any>;
 }

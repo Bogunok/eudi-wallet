@@ -26,6 +26,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @ApiOperation({ summary: 'Register in the wallet' })
   @ApiResponse({ description: 'Successfully registered, returns token' })
   @ApiResponse({ status: 409, description: 'Email is already in use' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
@@ -38,6 +39,7 @@ export class AuthController {
 
   @Public()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log in to the wallet' })
   @ApiResponse({ description: 'Successfully logged in, returns token' })
   @ApiResponse({ status: 401, description: 'Invalid email or password' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })

@@ -143,10 +143,12 @@ export class VerifierService {
 
     // Verify each disclosure
     for (const disclosureB64url of disclosures) {
-      const hash = crypto.createHash('sha256').update(disclosureB64url).digest();
+      const hash = crypto.createHash('sha256').update(disclosureB64url, 'ascii').digest();
       const hashB64url = hash.toString('base64url').replace(/=/g, '');
 
       if (!sdHashesInPayload.includes(hashB64url)) {
+        console.log('Computed:', hashB64url);
+        console.log('Allowed:', sdHashesInPayload);
         throw new BadRequestException(
           'Cryptographic mismatch: Disclosure hash not found in the signed SD-JWT payload',
         );

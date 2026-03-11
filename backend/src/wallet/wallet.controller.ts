@@ -22,10 +22,12 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { PresentCredentialDto } from './dto/present-credential.dto';
+import { SignDocumentDto } from './dto/sign-document.dto';
 
 @ApiTags('Wallet')
 @Controller('wallet')
@@ -107,5 +109,17 @@ export class WalletController {
       dto.sessionId,
       dto.discloseClaims,
     );
+  }
+
+  @Roles('HOLDER')
+  @ApiOperation({ summary: 'Create a Qualified Electronic Seal for a document' })
+  @ApiResponse({ status: 200, description: 'Document successfully signed.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiBadRequestResponse({ description: 'Incorrect data or CredentialId not found/not yours.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Post('sign-document')
+  async signDocument(@Req() req: any, @Body() dto: SignDocumentDto) {
+    return this.walletService.signDocument(req.user.id, dto);
   }
 }

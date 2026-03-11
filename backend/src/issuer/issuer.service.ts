@@ -3,18 +3,21 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DidService } from '../did/did.service';
 import * as crypto from 'crypto';
 import { RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
+import { GleifMockService } from './gleif-mock.service';
 
 @Injectable()
 export class IssuerService {
   constructor(
     private prisma: PrismaService,
     private didService: DidService,
+    private readonly gleifMock: GleifMockService,
   ) {}
 
   async getPendingRequests(issuerId: string) {
@@ -52,6 +55,32 @@ export class IssuerService {
       where: { userId: request.holderId },
     });
     if (!holderOrg) throw new BadRequestException('Organization of the holder not found');
+
+    //логіка для перевірки у внутрішньому mock реєстрі
+    const claimData = request.claimData as any;
+
+    const declaredLei = claimData.leiCode || claimData.lei || holderOrg.lei;
+    const declaredName = claimData.companyName || claimData.name || holderOrg.name;
+
+    try {
+      const isDataValid = await this.gleifMock.verifyOrganization(declaredLei, declaredName);
+
+      if (!isDataValid) {
+        // Якщо перевірка провалилася, відхиляємо заявку
+        await this.prisma.verifiableCredentialRequest.update({
+          where: { id: requestId },
+          data: { status: RequestStatus.REJECTED },
+        });
+        throw new BadRequestException(
+          'Verification failed: The declared data does not match the official external registry.',
+        );
+      }
+    } catch (error) {
+      if (error instanceof InternalServerErrorException) throw error;
+      throw new InternalServerErrorException(
+        'Verification process encountered an unexpected network error.',
+      );
+    }
 
     // Дістаємо ключі Емітента і розшифровуємо їх PIN-кодом
     const issuerDidDoc = await this.prisma.didDocument.findFirst({
@@ -96,7 +125,7 @@ export class IssuerService {
       const disclosureB64url = encodeBase64Url(disclosureString);
       disclosures.push(disclosureB64url);
 
-      const hash = crypto.createHash('sha256').update(disclosureString).digest();
+      const hash = crypto.createHash('sha256').update(disclosureB64url).digest();
       const hashB64url = encodeBase64Url(hash);
       sdHashes.push(hashB64url);
     }

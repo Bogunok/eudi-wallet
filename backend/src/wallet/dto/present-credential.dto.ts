@@ -11,8 +11,7 @@ export class PresentCredentialDto {
   credentialId: string;
 
   @ApiProperty({
-    description:
-      'The verification session ID provided by the Verifier (acts as the target for the presentation).',
+    description: 'The verification session ID provided by the Verifier',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
   @IsString()
@@ -20,8 +19,7 @@ export class PresentCredentialDto {
   sessionId: string;
 
   @ApiProperty({
-    description:
-      'An array of claim names that the user explicitly consented to disclose (Selective Disclosure).',
+    description: 'An array of claim names that user consented to disclose (Selective Disclosure)',
     example: ['lei_code', 'legal_name'],
     type: [String],
   })

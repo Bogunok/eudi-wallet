@@ -26,6 +26,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { VerifierService } from './verifier.service';
 import { VerificationRequestDto } from './dto/verification-request.dto';
 import { WalletPresentationResponseDto } from './dto/wallet-presentation-response.dto';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Verifier')
 @Controller('verifier')
@@ -79,6 +80,7 @@ export class VerifierController {
     return this.verifierService.getSessionsByVerifierId(req.user.id);
   }
 
+  @Public()
   @ApiOperation({ summary: 'Receive Verifiable Presentation (vp_token) from the Wallet' })
   @ApiParam({ name: 'sessionId', description: 'ID of the Verification Session to update' })
   @ApiResponse({ description: 'Wallet successfully submitted the presentation.' })

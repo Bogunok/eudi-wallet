@@ -14,6 +14,8 @@ import { AuthService } from 'src/auth/auth.service';
 import { DidService } from 'src/did/did.service';
 import * as bcrypt from 'bcrypt';
 import { lastValueFrom } from 'rxjs';
+import { SignDocumentDto } from './dto/sign-document.dto';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class WalletService {
@@ -172,7 +174,7 @@ export class WalletService {
 
     // HTTP Запит до Верифікатора
     try {
-      const verifierUrl = `http://localhost:3000/api/verifier/response/${sessionId}`;
+      const verifierUrl = `http://localhost:3000/verifier/response/${sessionId}`;
 
       const payload = {
         vp_token: croppedSdJwt,
@@ -194,5 +196,64 @@ export class WalletService {
       }
       throw new InternalServerErrorException('Network error: Could not reach the Verifier');
     }
+  }
+
+  async signDocument(userId: string, dto: SignDocumentDto) {
+    // Перевіряємо, чи існує LEI-документ і чи належить він цьому користувачу
+    const credential = await this.prisma.verifiableCredential.findFirst({
+      where: {
+        id: dto.credentialId,
+        userId: userId,
+      },
+    });
+
+    if (!credential) {
+      throw new BadRequestException('Credential not found or does not belong to you');
+    }
+
+    const didDocument = await this.prisma.didDocument.findFirst({
+      where: { userId },
+    });
+
+    if (!didDocument) {
+      throw new BadRequestException('DID Document not found. Please create a wallet first.');
+    }
+
+    // Розшифровуємо приватний ключ за допомогою ПІН-коду
+    let decryptedPrivateKeyBase64: string;
+    try {
+      decryptedPrivateKeyBase64 = await this.didService.decryptWithPin(
+        didDocument.encryptedPrivateKey,
+        didDocument.encryptionSalt,
+        didDocument.encryptionIv,
+        dto.pin,
+      );
+    } catch (error) {
+      throw new UnauthorizedException('Invalid PIN code');
+    }
+
+    const privateKeyObj = crypto.createPrivateKey({
+      key: Buffer.from(decryptedPrivateKeyBase64, 'base64'),
+      format: 'der',
+      type: 'pkcs8',
+    });
+
+    // Рахуємо хеш документа
+    const documentHash = crypto.createHash('sha256').update(dto.documentText).digest();
+
+    // Створюємо цифровий підпис (EdDSA)
+    const signature = crypto.sign(null, documentHash, privateKeyObj);
+
+    return {
+      success: true,
+      message: 'Qualified Electronic Seal created successfully',
+      signatureData: {
+        signedByDid: didDocument.did,
+        attachedCredentialId: credential.id,
+        documentHash: documentHash.toString('hex'),
+        signature: signature.toString('base64'),
+        timestamp: new Date().toISOString(),
+      },
+    };
   }
 }

@@ -7,7 +7,7 @@ export class SchemaService {
   constructor(private prisma: PrismaService) {}
 
   async createSchema(dto: CreateSchemaDto, issuerId: string) {
-    return this.prisma.verifiableCredentialSchema.create({
+    const newSchema = await this.prisma.verifiableCredentialSchema.create({
       data: {
         name: dto.name,
         schemaId: dto.schemaId,
@@ -15,6 +15,11 @@ export class SchemaService {
         issuerId: issuerId,
       },
     });
+
+    return {
+      message: 'Schema successfully created',
+      schema: newSchema,
+    };
   }
 
   async findAllSchemasByIssuer(issuerId: string) {
