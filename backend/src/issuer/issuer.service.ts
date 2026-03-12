@@ -8,12 +8,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DidService } from '../did/did.service';
 import * as crypto from 'crypto';
+import Ajv from 'ajv';
 import { RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
 import { GleifMockService } from './gleif-mock.service';
 
 @Injectable()
 export class IssuerService {
+  private ajv = new Ajv({ allErrors: true });
   constructor(
     private prisma: PrismaService,
     private didService: DidService,
@@ -59,27 +61,43 @@ export class IssuerService {
     //логіка для перевірки у внутрішньому mock реєстрі
     const claimData = request.claimData as any;
 
-    const declaredLei = claimData.leiCode || claimData.lei || holderOrg.lei;
-    const declaredName = claimData.companyName || claimData.name || holderOrg.name;
-
     try {
-      const isDataValid = await this.gleifMock.verifyOrganization(declaredLei, declaredName);
+      const validate = this.ajv.compile(request.schema.structure as object);
+      const isValid = validate(claimData);
 
-      if (!isDataValid) {
-        // Якщо перевірка провалилася, відхиляємо заявку
-        await this.prisma.verifiableCredentialRequest.update({
-          where: { id: requestId },
-          data: { status: RequestStatus.REJECTED },
-        });
+      if (!isValid) {
+        const errorMessages = this.ajv.errorsText(validate.errors, { separator: ', ' });
         throw new BadRequestException(
-          'Verification failed: The declared data does not match the official external registry.',
+          `Data does not match the schema format. Errors: ${errorMessages}`,
         );
       }
     } catch (error) {
-      if (error instanceof InternalServerErrorException) throw error;
-      throw new InternalServerErrorException(
-        'Verification process encountered an unexpected network error.',
-      );
+      if (error instanceof BadRequestException) throw error;
+      throw new InternalServerErrorException('Failed to compile or validate JSON schema');
+    }
+
+    if (request.schema.name === 'LegalEntityIdentifier') {
+      const declaredLei = claimData.leiCode || claimData.lei || holderOrg.lei;
+      const declaredName = claimData.companyName || claimData.name || holderOrg.name;
+
+      try {
+        const isDataValid = await this.gleifMock.verifyOrganization(declaredLei, declaredName);
+
+        if (!isDataValid) {
+          await this.prisma.verifiableCredentialRequest.update({
+            where: { id: requestId },
+            data: { status: RequestStatus.REJECTED },
+          });
+          throw new BadRequestException(
+            'Verification failed: The declared data does not match the official external registry.',
+          );
+        }
+      } catch (error) {
+        if (error instanceof InternalServerErrorException) throw error;
+        throw new InternalServerErrorException(
+          'Verification process encountered an unexpected network error.',
+        );
+      }
     }
 
     // Дістаємо ключі Емітента і розшифровуємо їх PIN-кодом

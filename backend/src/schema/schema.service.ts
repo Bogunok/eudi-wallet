@@ -1,12 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
+import Ajv from 'ajv';
 
 @Injectable()
 export class SchemaService {
+  private ajv = new Ajv();
   constructor(private prisma: PrismaService) {}
 
   async createSchema(dto: CreateSchemaDto, issuerId: string) {
+    try {
+      // Якщо структура написана з помилками, ajv кине помилку
+      this.ajv.compile(dto.structure as object);
+    } catch (error) {
+      throw new BadRequestException(`Invalid JSON Schema format: ${error.message}`);
+    }
+
+    // Чи не існує вже схеми з таким ID
+    const existingSchema = await this.prisma.verifiableCredentialSchema.findFirst({
+      where: { schemaId: dto.schemaId },
+    });
+
+    if (existingSchema) {
+      throw new BadRequestException(`Schema with ID ${dto.schemaId} already exists.`);
+    }
+
     const newSchema = await this.prisma.verifiableCredentialSchema.create({
       data: {
         name: dto.name,

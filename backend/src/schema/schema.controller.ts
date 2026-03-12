@@ -8,6 +8,7 @@ import {
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -16,7 +17,7 @@ import { SchemaService } from './schema.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
 
 @ApiTags('Credential Schemas')
-@Controller('schema')
+@Controller('schemas')
 export class SchemaController {
   constructor(private readonly schemaService: SchemaService) {}
 
@@ -24,11 +25,11 @@ export class SchemaController {
   @Roles('ISSUER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new schema (Only for Issuers)' })
-  @ApiResponse({ description: 'Schema created successfully.' })
+  @ApiResponse({ status: 201, description: 'Schema created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Post('create')
+  @Post()
   async create(@Body() dto: CreateSchemaDto, @Req() req: any) {
     const issuerId = req.user.id;
     return this.schemaService.createSchema(dto, issuerId);
@@ -39,11 +40,11 @@ export class SchemaController {
   @Roles('ISSUER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get list of schemas for this organization' })
-  @ApiResponse({ description: 'Schema list retrieved successfully.' })
+  @ApiResponse({ status: 200, description: 'Schema list retrieved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Get('my-schemas')
+  @Get()
   async findAll(@Req() req: any) {
     const issuerId = req.user.id;
     return this.schemaService.findAllSchemasByIssuer(issuerId);
@@ -52,7 +53,8 @@ export class SchemaController {
   // перегляд схеми (для всіх)
   @ApiOperation({ summary: 'Get public schema structure (For all)' })
   @ApiParam({ name: 'schemaId', description: 'ID of the schema from database' })
-  @ApiResponse({ description: 'Schema retrieved successfully.' })
+  @ApiResponse({ status: 200, description: 'Schema retrieved successfully.' })
+  @ApiNotFoundResponse({ description: 'Schema with given ID not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Get(':schemaId')
   async getSchema(@Param('schemaId') schemaId: string) {

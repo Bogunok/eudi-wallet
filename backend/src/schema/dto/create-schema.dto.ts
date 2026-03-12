@@ -20,22 +20,31 @@ export class CreateSchemaDto {
 
   @ApiProperty({
     description:
-      'The structure of the credential, defining field types, UI labels, and descriptions.',
+      'The JSON Schema structure of the credential, defining field types, UI titles, and descriptions.',
     example: {
-      leiCode: {
-        type: 'string',
-        label: 'LEI Code',
-        description: 'The 20-character global Legal Entity Identifier',
+      type: 'object',
+      properties: {
+        leiCode: {
+          type: 'string',
+          title: 'LEI Code',
+          description: 'The 20-character global Legal Entity Identifier',
+          minLength: 20,
+          maxLength: 20,
+        },
+        companyName: {
+          type: 'string',
+          title: 'Company Name',
+          description: 'The official registered name of the organization',
+        },
+        country: {
+          type: 'string',
+          title: 'Country of Registration',
+          minLength: 2,
+          maxLength: 2,
+        },
       },
-      companyName: {
-        type: 'string',
-        label: 'Company Name',
-        description: 'The official registered name of the organization',
-      },
-      country: {
-        type: 'string',
-        label: 'Country of Registration',
-      },
+      required: ['leiCode', 'companyName', 'country'],
+      additionalProperties: false,
     },
   })
   @IsObject()
