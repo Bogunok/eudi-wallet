@@ -13,6 +13,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { SchemaModule } from './schema/schema.module';
 import { IssuerModule } from './issuer/issuer.module';
 import { VerifierModule } from './verifier/verifier.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { VerifierModule } from './verifier/verifier.module';
     SchemaModule,
     IssuerModule,
     VerifierModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

@@ -13,10 +13,15 @@ import { ChangeEmailDto } from './dto/change-email.dto';
 import { FindAllUsersQueryDto } from './dto/user-query.dto';
 import { CreateUserByAdminDto, UpdateUserByAdminDto } from './dto/admin-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { NotificationService } from 'src/notification/notification.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async findOneByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
@@ -164,6 +169,14 @@ export class UserService {
       data: { password: hashedNewPassword },
     });
 
+    await this.notificationService.create({
+      userId: userId,
+      title: 'Password Updated',
+      message:
+        'Your account password has been successfully changed. If you did not perform this action, please secure your account immediately.',
+      type: NotificationType.SYSTEM,
+    });
+
     return { message: 'Password successfully changed' };
   }
 
@@ -214,6 +227,13 @@ export class UserService {
     await this.prisma.user.update({
       where: { id: userId },
       data: { email: dto.newEmail },
+    });
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'Email updated',
+      message: `Your account email address has been successfully changed to ${dto.newEmail}. If you did not request this change, please secure your account immediately.`,
+      type: NotificationType.SYSTEM,
     });
 
     return { message: 'Email successfully changed' };

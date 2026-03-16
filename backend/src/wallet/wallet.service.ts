@@ -9,13 +9,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
-import { v4 as uuidv4 } from 'uuid';
 import { AuthService } from 'src/auth/auth.service';
 import { DidService } from 'src/did/did.service';
 import * as bcrypt from 'bcrypt';
 import { lastValueFrom } from 'rxjs';
 import { SignDocumentDto } from './dto/sign-document.dto';
 import * as crypto from 'crypto';
+import { NotificationService } from 'src/notification/notification.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class WalletService {
@@ -26,6 +27,7 @@ export class WalletService {
     private authService: AuthService,
     private didService: DidService,
     private readonly httpService: HttpService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // Метод створення DID для конкретного користувача
@@ -34,10 +36,16 @@ export class WalletService {
     const userDidDomain = `${domain}:user:${userId}`;
     const newDidDocument = await this.didService.generateDidWebData(userId, pin, userDidDomain);
 
+    await this.notificationService.create({
+      userId: userId,
+      title: 'DID generated',
+      message: 'Your unique DID was successfully created.',
+      type: NotificationType.SYSTEM,
+    });
+
     return newDidDocument;
   }
 
-  // Метод отримати всі свої DID
   async getMyDids(userId: string) {
     return this.prisma.didDocument.findMany({
       where: { userId },
@@ -54,13 +62,22 @@ export class WalletService {
   }
 
   async resetWallet(userId: string) {
-    // Видаляємо всі DID та документи користувача, але залишаємо акаунт
-    return this.prisma.$transaction([
+    const transactionResult = await this.prisma.$transaction([
       this.prisma.didDocument.deleteMany({ where: { userId } }),
       this.prisma.verifiableCredential.deleteMany({
         where: { organization: { userId } },
       }),
     ]);
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'Wallet Reset Successful',
+      message:
+        'Your wallet has been completely reset. All DIDs and credentials have been securely deleted.',
+      type: NotificationType.SYSTEM,
+    });
+
+    return transactionResult;
   }
 
   async changePin(userId: string, oldPin: string, newPin: string) {
@@ -108,10 +125,20 @@ export class WalletService {
     const salt = await bcrypt.genSalt();
     const hashedPin = await bcrypt.hash(newPin, salt);
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { pin: hashedPin, pinAttempts: 0 },
     });
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'PIN Code Updated',
+      message:
+        'Your wallet PIN code has been successfully changed. Please keep your new PIN secure.',
+      type: NotificationType.SYSTEM,
+    });
+
+    return updatedUser;
   }
 
   //Обрізає SD-JWT, залишаючи тільки ті поля, які дозволив користувач, і відправляє результат Верифікатору.
@@ -172,6 +199,9 @@ export class WalletService {
       ],
     };
 
+    const documentName =
+      credential.type && credential.type.length > 1 ? credential.type[1] : 'Credential';
+
     // HTTP Запит до Верифікатора
     try {
       const verifierUrl = `http://localhost:3000/verifier/response/${sessionId}`;
@@ -183,15 +213,32 @@ export class WalletService {
 
       const response = await lastValueFrom(this.httpService.post(verifierUrl, payload));
 
+      await this.notificationService.create({
+        userId: userId,
+        title: 'Data shared successfully',
+        message: `Your selectively disclosed data from "${documentName}" was successfully verified and accepted by the requesting party.`,
+        type: NotificationType.VERIFICATION,
+      });
+
       return {
         message: 'Presentation successfully submitted to the Verifier',
         verifierResponse: response.data,
       };
     } catch (error) {
       this.logger.error(`Failed to send presentation to verifier: ${error.message}`);
+
+      const errorMessage = error.response?.data?.message || error.message;
+
+      await this.notificationService.create({
+        userId: userId,
+        title: 'Verification failed',
+        message: `The requesting party rejected your "${documentName}" presentation. Reason: ${errorMessage}.`,
+        type: NotificationType.WARNING,
+      });
+
       if (error.response) {
         throw new InternalServerErrorException(
-          `Verifier rejected the presentation: ${error.response.data?.message || error.message}`,
+          `Verifier rejected the presentation: ${errorMessage}`,
         );
       }
       throw new InternalServerErrorException('Network error: Could not reach the Verifier');
@@ -243,6 +290,16 @@ export class WalletService {
 
     // Створюємо цифровий підпис (EdDSA)
     const signature = crypto.sign(null, documentHash, privateKeyObj);
+
+    const documentName =
+      credential.type && credential.type.length > 1 ? credential.type[1] : 'Credential';
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'Document signed successfully',
+      message: `You have successfully applied a Qualified Electronic Seal (QES) to a document using your "${documentName}".`,
+      type: NotificationType.SYSTEM,
+    });
 
     return {
       success: true,

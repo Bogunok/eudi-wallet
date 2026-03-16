@@ -9,9 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DidService } from '../did/did.service';
 import * as crypto from 'crypto';
 import Ajv from 'ajv';
-import { RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
+import { NotificationType, RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
 import { ApproveRequestDto } from './dto/approve-request.dto';
 import { GleifMockService } from './gleif-mock.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class IssuerService {
@@ -20,6 +21,7 @@ export class IssuerService {
     private prisma: PrismaService,
     private didService: DidService,
     private readonly gleifMock: GleifMockService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getPendingRequests(issuerId: string) {
@@ -88,6 +90,14 @@ export class IssuerService {
             where: { id: requestId },
             data: { status: RequestStatus.REJECTED },
           });
+
+          await this.notificationService.create({
+            userId: request.holderId,
+            title: 'Request denied',
+            message: `Data differs from the official registry ${request.schema.name}.`,
+            type: NotificationType.WARNING,
+          });
+
           throw new BadRequestException(
             'Verification failed: The declared data does not match the official external registry.',
           );
@@ -194,6 +204,13 @@ export class IssuerService {
       data: { status: RequestStatus.APPROVED },
     });
 
+    await this.notificationService.create({
+      userId: request.holderId,
+      title: 'Document issued!',
+      message: `Your document ${request.schema.name} was successfully added to wallet`,
+      type: NotificationType.ISSUANCE,
+    });
+
     return {
       message: 'SD-JWT Credential issued successfully!',
       credentialId: issuedCredential.id,
@@ -208,10 +225,20 @@ export class IssuerService {
     if (!issuerDidDoc || issuerDidDoc.userId !== issuerId) {
       throw new ForbiddenException('Only the issuer can revoke this credential');
     }
-
-    return this.prisma.verifiableCredential.update({
+    const revokedVc = await this.prisma.verifiableCredential.update({
       where: { id: vcId },
       data: { status: VerifiableCredentialStatus.REVOKED },
     });
+
+    const documentName = vc.type && vc.type.length > 1 ? vc.type[1] : 'Document';
+
+    await this.notificationService.create({
+      userId: vc.userId,
+      title: 'Document revoked!',
+      message: `Issuer revoked your document "${documentName}". It is not valid anymore and you can't use it in any way`,
+      type: NotificationType.WARNING,
+    });
+
+    return revokedVc;
   }
 }
