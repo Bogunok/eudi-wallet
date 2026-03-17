@@ -1,18 +1,7 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Body,
-  UseGuards,
-  Req,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Req, HttpCode, HttpStatus } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
   ApiInternalServerErrorResponse,
   ApiForbiddenResponse,
   ApiUnauthorizedResponse,
@@ -20,22 +9,19 @@ import {
   ApiParam,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { VerifierService } from './verifier.service';
 import { VerificationRequestDto } from './dto/verification-request.dto';
 import { WalletPresentationResponseDto } from './dto/wallet-presentation-response.dto';
 import { Public } from '../auth/decorators/public.decorator';
+import { Role } from '@prisma/client';
+import { Auth } from '../auth/decorators/auth.decorator';
 
 @ApiTags('Verifier')
 @Controller('verifier')
 export class VerifierController {
   constructor(private readonly verifierService: VerifierService) {}
 
-  @Roles('VERIFIER')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Auth(Role.VERIFIER)
   @ApiOperation({ summary: 'Create a new verification request (e.g., ask for LEI Credential)' })
   @ApiResponse({
     description: 'Returns a session ID and the OID4VP redirect URL for the wallet.',
@@ -49,9 +35,7 @@ export class VerifierController {
     return this.verifierService.createVerificationRequest(req.user.id, dto.requestedType);
   }
 
-  @Roles('VERIFIER')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Auth(Role.VERIFIER)
   @ApiOperation({ summary: 'Get the status and result of a specific verification session' })
   @ApiParam({ name: 'sessionId', description: 'ID of the Verification Session' })
   @ApiResponse({
@@ -67,9 +51,7 @@ export class VerifierController {
     return this.verifierService.getSessionById(sessionId, req.user.id);
   }
 
-  @Roles('VERIFIER')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Auth(Role.VERIFIER)
   @ApiOperation({ summary: 'Get all verification sessions created by this verifier' })
   @ApiResponse({ description: 'List of verification sessions.', status: HttpStatus.OK })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -93,5 +75,17 @@ export class VerifierController {
     @Body() dto: WalletPresentationResponseDto,
   ) {
     return this.verifierService.verifyWalletResponse(sessionId, dto);
+  }
+
+  @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Get trusted list of verifiers for the wallet directory' })
+  @ApiResponse({ description: 'Successfully get trusted list' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'The list with the requested id was not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Get('trusted-list')
+  async getTrustedList() {
+    return this.verifierService.getTrustedVerifiers();
   }
 }

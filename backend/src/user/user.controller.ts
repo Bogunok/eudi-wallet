@@ -10,7 +10,6 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-  UseGuards,
   NotFoundException,
   ClassSerializerInterceptor,
   UseInterceptors,
@@ -18,8 +17,6 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
-  ApiQuery,
   ApiForbiddenResponse,
   ApiUnauthorizedResponse,
   ApiOkResponse,
@@ -40,7 +37,6 @@ import { ChangeEmailDto } from './dto/change-email.dto';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { FindAllUsersQueryDto } from './dto/user-query.dto';
 import { USER_CONTROLLER_MESSAGES } from './user.constants';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CreateUserByAdminDto, UpdateUserByAdminDto } from './dto/admin-user.dto';
 import { UserEntity } from './entities/user.entity';
 
@@ -51,7 +47,6 @@ export interface UserPayload {
 }
 
 @ApiTags('User')
-@ApiBearerAuth()
 @Controller()
 @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
@@ -95,7 +90,7 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiOkResponse({ description: 'User profile retrieved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -114,7 +109,7 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @ApiOperation({ summary: 'Delete user account' })
   @ApiOkResponse({ description: 'User was successfully removed.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -147,7 +142,7 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @ApiOperation({ summary: 'Change user password' })
   @ApiOkResponse({ description: 'User password changed successfully.' })
   @ApiBadRequestResponse({ description: 'Invalid current password.' })
@@ -163,7 +158,7 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @ApiOperation({ summary: 'Change 4-digit PIN code' })
   @ApiOkResponse({ description: 'User PIN code changed successfully.' })
   @ApiBadRequestResponse({ description: ' Invalid current PIN code.' })
@@ -179,7 +174,7 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @ApiOperation({ summary: 'Change account email address' })
   @ApiOkResponse({ description: 'User email changed successfully.' })
   @ApiBadRequestResponse({ description: 'Invalid password.' })

@@ -12,16 +12,15 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Auth } from '../auth/decorators/auth.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('Organizations')
 @Controller('organization')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiResponse({ description: 'Organization created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
@@ -31,7 +30,7 @@ export class OrganizationController {
     return this.organizationService.create(dto, req.user.id);
   }
 
-  @Roles('HOLDER')
+  @Auth()
   @ApiOperation({ summary: 'Get my organization details' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiNotFoundResponse({ description: 'The organization was not found.' })
@@ -42,7 +41,7 @@ export class OrganizationController {
     return this.organizationService.findMyOrganization(req.user.id);
   }
 
-  @Roles('HOLDER')
+  @Auth()
   @ApiOperation({ summary: 'Update organization profile (name, country)' })
   @ApiNotFoundResponse({ description: 'The organization was not found.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -53,7 +52,7 @@ export class OrganizationController {
     return this.organizationService.updateMyOrganization(req.user.id, dto);
   }
 
-  @Roles('HOLDER')
+  @Auth()
   @ApiOperation({ summary: 'Generate did to obtain VC' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })

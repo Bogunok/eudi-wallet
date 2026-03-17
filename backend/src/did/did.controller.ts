@@ -1,10 +1,9 @@
 import { DidService } from './did.service';
-import { Body, Post, Controller, UseGuards, Req, Param, Get, Patch } from '@nestjs/common';
+import { Body, Post, Controller, Req, Param, Get, Patch } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
   ApiForbiddenResponse,
@@ -12,7 +11,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { GenerateDidDto } from './dto/generate-did.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Auth } from '../auth/decorators/auth.decorator';
 
 //update method is optional, as the DID document is generated once and usually does not require updates.
 // However, if there is a need to update certain fields (e.g., adding new public keys or updating service endpoints),
@@ -23,8 +22,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 export class DidController {
   constructor(private readonly didService: DidService) {}
 
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @Auth()
   @ApiOperation({ summary: 'Generate DID document for an organization' })
   @ApiResponse({ description: 'DID document generated successfully' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -37,6 +35,16 @@ export class DidController {
     return await this.didService.generateDidWebData(userId, dto.pin, dto.domain);
   }
 
+  @Auth()
+  @ApiOperation({ summary: 'Get all user DIDs' })
+  @ApiResponse({ status: 200, description: 'DIDs retrieved successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @Get('my-dids')
+  async getMyDids(@Req() req: any) {
+    return this.didService.getMyDids(req.user.id);
+  }
+
   //хто завгодно може отримати публічний DID документ, тому цей ендпоінт не захищений
   @ApiOperation({ summary: 'Resolve (read) public DID document' })
   @ApiParam({ name: 'did', example: 'did:web:knu.ua' })
@@ -46,8 +54,7 @@ export class DidController {
     return await this.didService.resolveDid(did);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @Auth()
   @ApiOperation({ summary: 'Deactivate DID document' })
   @ApiParam({ name: 'did', example: 'did:web:knu.ua' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })

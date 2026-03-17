@@ -1,8 +1,7 @@
-import { Controller, Post, Body, Get, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Req } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
   ApiParam,
   ApiResponse,
   ApiUnauthorizedResponse,
@@ -10,20 +9,17 @@ import {
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { SchemaService } from './schema.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
+import { Role } from '@prisma/client';
+import { Auth } from 'src/auth/decorators/auth.decorator';
 
 @ApiTags('Credential Schemas')
 @Controller('schemas')
 export class SchemaController {
   constructor(private readonly schemaService: SchemaService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ISSUER')
-  @ApiBearerAuth()
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Create a new schema (Only for Issuers)' })
   @ApiResponse({ status: 201, description: 'Schema created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -36,9 +32,7 @@ export class SchemaController {
   }
 
   // перегляд Тільки для Емітентів
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ISSUER')
-  @ApiBearerAuth()
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Get list of schemas for this organization' })
   @ApiResponse({ status: 200, description: 'Schema list retrieved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })

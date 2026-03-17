@@ -5,11 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { NotificationType } from '@prisma/client';
 
 @Injectable()
 export class DidService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   private readonly PEPPER = process.env.ENCRYPTION_PEPPER;
   private readonly ALGORITHM = 'aes-256-gcm';
@@ -44,7 +49,30 @@ export class DidService {
         userId: userId,
       },
     });
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'DID Generated',
+      message: `Your unique DID (did:web:${domain}) was successfully created and secured.`,
+      type: NotificationType.SYSTEM,
+    });
+
     return savedDidDocument;
+  }
+
+  async getMyDids(userId: string) {
+    return this.prisma.didDocument.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        did: true,
+        method: true,
+        keyId: true,
+        publicKey: true,
+        createdAt: true,
+        deactivatedAt: true,
+      },
+    });
   }
 
   //Шифрує приватний ключ за допомогою PIN-коду користувача
@@ -162,6 +190,13 @@ export class DidService {
     const updatedDoc = await this.prisma.didDocument.update({
       where: { did },
       data: { deactivatedAt: new Date() },
+    });
+
+    await this.notificationService.create({
+      userId: userId,
+      title: 'DID Deactivated',
+      message: `Your DID document (${did}) has been successfully deactivated and can no longer be used.`,
+      type: NotificationType.SYSTEM,
     });
 
     return {

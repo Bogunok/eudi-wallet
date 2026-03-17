@@ -31,7 +31,7 @@ export class WalletService {
   ) {}
 
   // Метод створення DID для конкретного користувача
-  async createDid(userId: string, pin: string) {
+  /*async createDid(userId: string, pin: string) {
     const domain = process.env.APP_DOMAIN || 'localhost:3000';
     const userDidDomain = `${domain}:user:${userId}`;
     const newDidDocument = await this.didService.generateDidWebData(userId, pin, userDidDomain);
@@ -59,7 +59,7 @@ export class WalletService {
         deactivatedAt: true,
       },
     });
-  }
+  }*/
 
   async resetWallet(userId: string) {
     const transactionResult = await this.prisma.$transaction([

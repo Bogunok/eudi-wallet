@@ -19,6 +19,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from './decorators/public.decorator';
+import { RegisterIssuerDto } from './dto/register-issuer.dto';
+import { Auth } from '../auth/decorators/auth.decorator';
+import { Role } from '@prisma/client';
+import { RegisterVerifierDto } from './dto/register-verifier.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -35,6 +39,29 @@ export class AuthController {
     const tokens = await this.authService.register(dto);
     this.setCookies(res, tokens.accessToken, tokens.refreshToken);
     return { message: 'Registered and logged in successfully' };
+  }
+
+  @Auth(Role.ADMIN)
+  @ApiOperation({ summary: 'Register a new Trusted Issuer (Admin only)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Issuer successfully registered and added to the Trusted List.',
+  })
+  @ApiResponse({ status: 409, description: 'Email already in use.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Post('register-issuer')
+  async registerIssuer(@Body() dto: RegisterIssuerDto) {
+    return this.authService.registerIssuerByAdmin(dto);
+  }
+
+  @Auth(Role.ADMIN)
+  @ApiOperation({ summary: 'Register a new Verifier (Admin only)' })
+  @ApiResponse({ status: 201, description: 'Verifier successfully registered' })
+  @ApiResponse({ status: 409, description: 'Email already in use.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Post('register-verifier')
+  async registerVerifier(@Body() dto: RegisterVerifierDto) {
+    return this.authService.registerVerifierByAdmin(dto);
   }
 
   @Public()

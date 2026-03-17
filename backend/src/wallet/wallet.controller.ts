@@ -1,20 +1,8 @@
-import {
-  Controller,
-  Post,
-  Get,
-  UseGuards,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Patch,
-  Req,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import { WalletService } from './wallet.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiOperation } from '@nestjs/swagger/dist/decorators/api-operation.decorator';
 import { ChangePinDto } from './dto/change-pin.dto';
 import {
-  ApiBearerAuth,
+  ApiOperation,
   ApiResponse,
   ApiTags,
   ApiBody,
@@ -24,20 +12,17 @@ import {
   ApiInternalServerErrorResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { PresentCredentialDto } from './dto/present-credential.dto';
 import { SignDocumentDto } from './dto/sign-document.dto';
+import { Role } from '@prisma/client';
+import { Auth } from '../auth/decorators/auth.decorator';
 
 @ApiTags('Wallet')
 @Controller('wallet')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
 export class WalletController {
-  authService: any;
   constructor(private readonly walletService: WalletService) {}
 
-  @Roles('HOLDER', 'VERIFIER', 'ISSUER')
+  /*@Auth(Role.HOLDER, Role.VERIFIER, Role.ISSUER)
   @ApiOperation({ summary: 'Create a new DID for the user (requires PIN)' })
   @ApiResponse({ status: 201, description: 'DID created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -53,21 +38,10 @@ export class WalletController {
   @Post('create-did')
   async createDid(@Req() req, @Body('pin') pin: string) {
     return this.walletService.createDid(req.user.id, pin);
-  }
+  }*/
 
-  @Roles('HOLDER')
-  @ApiOperation({ summary: 'Get all user DIDs' })
-  @ApiResponse({ status: 200, description: 'DID retrieved successfully.' })
-  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
-  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'DID not found.' })
-  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Get('dids')
-  getMyDids(@Req() req) {
-    return this.walletService.getMyDids(req.user.id);
-  }
-
-  @Roles('HOLDER')
+  /*comment for a while because there is the same in User.controller
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Change wallet PIN code' })
   @ApiResponse({ status: 200, description: 'PIN changed successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -77,9 +51,9 @@ export class WalletController {
   @Patch('change-pin')
   async updatePin(@Req() req, @Body() dto: ChangePinDto) {
     return this.walletService.changePin(req.user.id, dto.oldPin, dto.newPin);
-  }
+  }*/
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Reset wallet (delete DID and VC)' })
   @ApiResponse({ status: 200, description: 'Wallet reset successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -92,7 +66,7 @@ export class WalletController {
     return this.walletService.resetWallet(req.user.id);
   }
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Present a Verifiable Credential to a Verifier (Selective Disclosure)' })
   @ApiResponse({ status: 200, description: 'Credential successfully presented to the verifier.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -111,7 +85,7 @@ export class WalletController {
     );
   }
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Create a Qualified Electronic Seal for a document' })
   @ApiResponse({ status: 200, description: 'Document successfully signed.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })

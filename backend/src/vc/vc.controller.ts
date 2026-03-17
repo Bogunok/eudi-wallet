@@ -1,22 +1,8 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-  Request,
-  Req,
-  Patch,
-} from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, Req } from '@nestjs/common';
 import { VcService } from './vc.service';
-import { CreateVerifiableCredentialDto } from './dto/create-credential.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
   ApiResponse,
   ApiParam,
   ApiUnauthorizedResponse,
@@ -24,19 +10,17 @@ import {
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { RequestCredentialDto } from './dto/request-credential.dto';
+import { Role } from '@prisma/client';
+import { Auth } from '../auth/decorators/auth.decorator';
 
 @ApiTags('Verifiable Credentials (Wallet)')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('vc')
 export class VcController {
   constructor(private readonly vcService: VcService) {}
 
   //Список усіх документів організації
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Get all active Verifiable Credentials for a specific organization' })
   @ApiParam({ name: 'orgId', description: 'ID of the organization (Holder)' })
   @ApiResponse({ description: 'List of active Verifiable Credentials retrieved successfully.' })
@@ -50,7 +34,7 @@ export class VcController {
   }
 
   //Деталі одного документа
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Get verifiable credential by ID' })
   @ApiParam({ name: 'id', description: 'ID of the Verifiable Credential' })
   @ApiResponse({ description: 'Verifiable Credential retrieved successfully.' })
@@ -63,7 +47,7 @@ export class VcController {
     return this.vcService.findCredentialById(id, req.user.id);
   }
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Request Verifiable Credential from Issuer' })
   @ApiResponse({ description: 'Verifiable Credential requested successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
@@ -75,7 +59,7 @@ export class VcController {
     return this.vcService.requestCredentialFromIssuer(dto, req.user.id);
   }
 
-  @Roles('HOLDER')
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Delete verifiable credential locally' })
   @ApiResponse({ description: 'Document successfully deleted locally' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })

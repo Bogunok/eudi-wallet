@@ -12,6 +12,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { RegisterIssuerDto } from './dto/register-issuer.dto';
 
 @Injectable()
 export class AuthService {
@@ -79,13 +80,87 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const newUser = await this.userService.create({
       ...dto,
-      role: dto.role || Role.HOLDER,
+      role: Role.HOLDER,
     });
 
     const tokens = await this.getTokens(newUser.id, newUser.email, newUser.role);
     await this.updateRefreshTokenHash(newUser.id, tokens.refreshToken);
 
     return tokens; //{ accessToken, refreshToken }
+  }
+
+  async registerIssuerByAdmin(dto: RegisterIssuerDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existingUser) {
+      throw new ConflictException('Email already in use');
+    }
+
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+    const newIssuer = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashedPassword,
+        pin: '', //емітент створить пін при першому вході для генерації DID
+        role: Role.ISSUER,
+        organizations: {
+          create: {
+            name: dto.organizationName,
+            country: dto.country,
+            lei: dto.lei,
+          },
+        },
+      },
+      include: {
+        organizations: true,
+      },
+    });
+
+    return {
+      message: 'Issuer successfully registered',
+      issuerId: newIssuer.id,
+      organizationName: newIssuer.organizations[0].name,
+    };
+  }
+
+  async registerVerifierByAdmin(dto: RegisterIssuerDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existingUser) {
+      throw new ConflictException('Email already in use');
+    }
+
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+    const newIssuer = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashedPassword,
+        pin: '',
+        role: Role.VERIFIER,
+        organizations: {
+          create: {
+            name: dto.organizationName,
+            country: dto.country,
+            lei: dto.lei,
+          },
+        },
+      },
+      include: {
+        organizations: true,
+      },
+    });
+
+    return {
+      message: 'Verifier successfully registered',
+      issuerId: newIssuer.id,
+      organizationName: newIssuer.organizations[0].name,
+    };
   }
 
   async loginWithPassword(dto: LoginDto) {

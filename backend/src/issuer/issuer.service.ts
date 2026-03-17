@@ -13,6 +13,7 @@ import { NotificationType, RequestStatus, VerifiableCredentialStatus } from '@pr
 import { ApproveRequestDto } from './dto/approve-request.dto';
 import { GleifMockService } from './gleif-mock.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { Prisma, Role } from '@prisma/client';
 
 @Injectable()
 export class IssuerService {
@@ -38,6 +39,23 @@ export class IssuerService {
       },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  async getTrustedIssuers() {
+    const issuers = await this.prisma.user.findMany({
+      where: { role: Role.ISSUER },
+      select: {
+        id: true,
+        email: true,
+        organizations: { select: { name: true, lei: true } },
+      },
+    });
+
+    return issuers.map(issuer => ({
+      id: issuer.id,
+      name: issuer.organizations[0]?.name || issuer.email,
+      lei: issuer.organizations[0]?.lei || 'N/A',
+    }));
   }
 
   async approveRequestAndIssue(requestId: string, issuerId: string, dto: ApproveRequestDto) {

@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
 import { VerificationStatus } from '@prisma/client';
 import { WalletPresentationResponseDto } from './dto/wallet-presentation-response.dto';
+import { Prisma, Role } from '@prisma/client';
 
 @Injectable()
 export class VerifierService {
@@ -83,6 +84,23 @@ export class VerifierService {
       where: { verifierId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getTrustedVerifiers() {
+    const verifiers = await this.prisma.user.findMany({
+      where: { role: Role.VERIFIER },
+      select: {
+        id: true,
+        email: true,
+        organizations: { select: { name: true, lei: true } },
+      },
+    });
+
+    return verifiers.map(verifier => ({
+      id: verifier.id,
+      name: verifier.organizations[0]?.name || verifier.email,
+      lei: verifier.organizations[0]?.lei || 'N/A',
+    }));
   }
 
   async verifyWalletResponse(sessionId: string, dto: WalletPresentationResponseDto) {

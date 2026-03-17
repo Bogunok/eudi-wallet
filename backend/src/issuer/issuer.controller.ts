@@ -10,20 +10,17 @@ import {
   ApiParam,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { IssuerService } from './issuer.service';
 import { ApproveRequestDto } from './dto/approve-request.dto';
+import { Role } from '@prisma/client';
+import { Auth } from '../auth/decorators/auth.decorator';
 
 @ApiTags('Issuer Dashboard')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ISSUER')
 @Controller('issuer')
 export class IssuerController {
   constructor(private readonly issuerService: IssuerService) {}
 
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Get pending requests for the issuer' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
@@ -33,11 +30,12 @@ export class IssuerController {
     return this.issuerService.getPendingRequests(req.user.id);
   }
 
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Approve a pending request and issue a credential' })
   @ApiResponse({ description: 'Verifiable Credential issued and saved successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
+  @ApiNotFoundResponse({ description: 'The request with such id was not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Post('requests/:id/approve')
   async approveRequest(
@@ -48,15 +46,28 @@ export class IssuerController {
     return this.issuerService.approveRequestAndIssue(requestId, req.user.id, dto);
   }
 
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Revoke an already issued credential' })
   @ApiParam({ name: 'id', description: 'ID Verifiable Credential' })
   @ApiResponse({ description: 'Document successfully revoked' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'The user with the requested id was not found.' })
+  @ApiNotFoundResponse({ description: 'The credential with the requested id was not found.' })
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Patch('vc/:id/revoke')
   async revokeCredential(@Param('id') vcId: string, @Req() req: any) {
     return this.issuerService.revokeCredential(vcId, req.user.id);
+  }
+
+  @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Get trusted list of issuers for the wallet directory' })
+  @ApiResponse({ description: 'Successfully get trusted list' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiNotFoundResponse({ description: 'The list with the requested id was not found.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Get('trusted-list')
+  async getTrustedList() {
+    return this.issuerService.getTrustedIssuers();
   }
 }
