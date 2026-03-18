@@ -26,4 +26,12 @@ export class PresentCredentialDto {
   @IsArray()
   @IsString({ each: true })
   discloseClaims: string[];
+
+  @ApiProperty({
+    description: 'Wallet PIN code to decrypt private key and sign the presentation',
+    example: '1111',
+  })
+  @IsString()
+  @IsNotEmpty()
+  pin: string;
 }

@@ -28,4 +28,12 @@ export class RequestCredentialDto {
   @IsObject()
   @IsNotEmpty()
   claimData: any;
+
+  @ApiProperty({
+    description: 'Wallet PIN code to decrypt private key and sign the request',
+    example: '1111',
+  })
+  @IsString()
+  @IsNotEmpty()
+  pin: string;
 }

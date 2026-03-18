@@ -21,6 +21,7 @@ export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
 
   @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Create organization' })
   @ApiResponse({ description: 'Organization created successfully.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })

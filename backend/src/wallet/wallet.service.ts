@@ -16,7 +16,8 @@ import { lastValueFrom } from 'rxjs';
 import { SignDocumentDto } from './dto/sign-document.dto';
 import * as crypto from 'crypto';
 import { NotificationService } from 'src/notification/notification.service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, RequestStatus } from '@prisma/client';
+import { RequestCredentialDto } from './dto/request-credential.dto';
 
 @Injectable()
 export class WalletService {
@@ -139,6 +140,34 @@ export class WalletService {
     });
 
     return updatedUser;
+  }
+
+  //Створення заявки на документ
+  async requestCredentialFromIssuer(dto: RequestCredentialDto, holderId: string) {
+    // Перевіряємо, чи існує така схема взагалі
+    const schema = await this.prisma.verifiableCredentialSchema.findUnique({
+      where: { id: dto.schemaId },
+    });
+    if (!schema) throw new NotFoundException('Verifiable credential schema not found');
+
+    const request = await this.prisma.verifiableCredentialRequest.create({
+      data: {
+        holderId: holderId,
+        issuerId: dto.issuerId,
+        schemaId: dto.schemaId,
+        claimData: dto.claimData,
+        status: RequestStatus.PENDING,
+      },
+    });
+
+    await this.notificationService.create({
+      userId: holderId,
+      title: 'Request submitted',
+      message: `Your application for the "${schema.name}" document has been successfully submitted to the issuer. You will be notified once it is reviewed.`,
+      type: NotificationType.ISSUANCE,
+    });
+
+    return request;
   }
 
   //Обрізає SD-JWT, залишаючи тільки ті поля, які дозволив користувач, і відправляє результат Верифікатору.

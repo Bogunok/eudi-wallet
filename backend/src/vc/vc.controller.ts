@@ -10,7 +10,7 @@ import {
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
-import { RequestCredentialDto } from './dto/request-credential.dto';
+import { RequestCredentialDto } from '../wallet/dto/request-credential.dto';
 import { Role } from '@prisma/client';
 import { Auth } from '../auth/decorators/auth.decorator';
 
@@ -45,18 +45,6 @@ export class VcController {
   @Get(':id')
   async getCredentialDetails(@Param('id') id: string, @Req() req: any) {
     return this.vcService.findCredentialById(id, req.user.id);
-  }
-
-  @Auth(Role.HOLDER)
-  @ApiOperation({ summary: 'Request Verifiable Credential from Issuer' })
-  @ApiResponse({ description: 'Verifiable Credential requested successfully.' })
-  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
-  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
-  @ApiNotFoundResponse({ description: 'Schema or Issuer not found.' })
-  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
-  @Post('request')
-  async requestCredential(@Body() dto: RequestCredentialDto, @Req() req: any) {
-    return this.vcService.requestCredentialFromIssuer(dto, req.user.id);
   }
 
   @Auth(Role.HOLDER)

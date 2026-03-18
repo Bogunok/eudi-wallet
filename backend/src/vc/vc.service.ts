@@ -1,9 +1,8 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
-import { RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
+import { VerifiableCredentialStatus } from '@prisma/client';
 import { DidService } from '../did/did.service';
-import { RequestCredentialDto } from './dto/request-credential.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationType } from '@prisma/client';
 
@@ -69,33 +68,5 @@ export class VcService {
     });
 
     return deletedCredential;
-  }
-
-  //Створення заявки на документ
-  async requestCredentialFromIssuer(dto: RequestCredentialDto, holderId: string) {
-    // Перевіряємо, чи існує така схема взагалі
-    const schema = await this.prisma.verifiableCredentialSchema.findUnique({
-      where: { id: dto.schemaId },
-    });
-    if (!schema) throw new NotFoundException('Verifiable credential schema not found');
-
-    const request = await this.prisma.verifiableCredentialRequest.create({
-      data: {
-        holderId: holderId,
-        issuerId: dto.issuerId,
-        schemaId: dto.schemaId,
-        claimData: dto.claimData,
-        status: RequestStatus.PENDING,
-      },
-    });
-
-    await this.notificationService.create({
-      userId: holderId,
-      title: 'Request submitted',
-      message: `Your application for the "${schema.name}" document has been successfully submitted to the issuer. You will be notified once it is reviewed.`,
-      type: NotificationType.ISSUANCE,
-    });
-
-    return request;
   }
 }
