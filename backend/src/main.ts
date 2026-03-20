@@ -9,7 +9,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
   app.enableCors({
-    origin: 'http://localhost:3001', // Порт фронтенду
+    origin: 'http://localhost:3002', // Порт фронтенду
     credentials: true,
   });
   const config = new DocumentBuilder()

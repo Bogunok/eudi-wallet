@@ -31,7 +31,4 @@ export class RegisterDto {
   @Length(4, 4, { message: 'PIN must be exactly 4 digits long' })
   @Matches(/^[0-9]+$/, { message: 'PIN must contain only digits' })
   pin: string;
-
-  @IsEnum(Role, { message: 'Role must be HOLDER, ISSUER or VERIFIER' })
-  role: Role;
 }

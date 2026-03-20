@@ -13,6 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterIssuerDto } from './dto/register-issuer.dto';
+import { PinLoginDto } from './dto/pin-login.dto';
 
 @Injectable()
 export class AuthService {
@@ -182,6 +183,27 @@ export class AuthService {
         where: { id: user.id },
         data: { pinAttempts: 0 },
       });
+    }
+
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
+
+    return tokens;
+  }
+
+  async pinLogin(dto: PinLoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Wrong email or pin');
+    }
+
+    const isPinValid = await bcrypt.compare(dto.pin, user.pin);
+
+    if (!isPinValid) {
+      throw new UnauthorizedException('Invalid pin');
     }
 
     const tokens = await this.getTokens(user.id, user.email, user.role);

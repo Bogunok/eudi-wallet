@@ -23,6 +23,7 @@ import { RegisterIssuerDto } from './dto/register-issuer.dto';
 import { Auth } from '../auth/decorators/auth.decorator';
 import { Role } from '@prisma/client';
 import { RegisterVerifierDto } from './dto/register-verifier.dto';
+import { PinLoginDto } from './dto/pin-login.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -75,6 +76,16 @@ export class AuthController {
     const tokens = await this.authService.loginWithPassword(dto);
     this.setCookies(res, tokens.accessToken, tokens.refreshToken);
     return { message: 'Logged in successfully' };
+  }
+
+  @Public()
+  @Post('pin-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login using 4-digit PIN' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in with PIN.' })
+  @ApiResponse({ status: 401, description: 'Invalid PIN or email.' })
+  async pinLogin(@Body() dto: PinLoginDto) {
+    return this.authService.pinLogin(dto);
   }
 
   @Public()
