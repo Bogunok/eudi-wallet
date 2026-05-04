@@ -54,4 +54,11 @@ export class SchemaController {
   async getSchema(@Param('schemaId') schemaId: string) {
     return this.schemaService.findSchemaById(schemaId);
   }
+
+  @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Get all available schemas from all trusted issuers (for Holder)' })
+  @Get('available')
+  async getAvailableSchemas() {
+    return this.schemaService.findAllAvailableSchemas();
+  }
 }

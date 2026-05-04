@@ -58,4 +58,19 @@ export class SchemaService {
 
     return schema;
   }
+
+  async findAllAvailableSchemas() {
+    return this.prisma.verifiableCredentialSchema.findMany({
+      include: {
+        issuer: {
+          select: {
+            id: true,
+            email: true,
+            organizations: { select: { name: true, lei: true } },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
 }
