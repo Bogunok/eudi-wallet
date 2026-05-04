@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, type ChangeEvent, type KeyboardEvent, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
+import { getCurrentUser, defaultRouteForRole } from '@/lib/auth';
 import { Mail, Eye, EyeOff, Lock, Wallet, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,8 @@ import { cn } from '@/lib/utils';
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get('next');
 
   const [isDeviceRecognized, setIsDeviceRecognized] = useState(false);
   const [email, setEmail] = useState('');
@@ -31,6 +34,19 @@ export function LoginForm() {
       setIsDeviceRecognized(true);
     }
   }, []);
+
+  const redirectAfterLogin = async () => {
+    if (nextParam && nextParam.startsWith('/')) {
+      router.push(nextParam);
+      return;
+    }
+    const user = await getCurrentUser();
+    if (user) {
+      router.push(defaultRouteForRole(user.role));
+    } else {
+      router.push('/wallet');
+    }
+  };
 
   const handlePinChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -68,56 +84,48 @@ export function LoginForm() {
     setError('');
 
     try {
-      const response = await api.post('/auth/login', { email, password });
+      await api.post('/auth/login', { email, password });
 
-      // Зберігаємо токен і пошту в пам'ять браузера
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
       localStorage.setItem('savedEmail', email);
 
-      router.push('/wallet');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      await redirectAfterLogin();
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err, 'Invalid email or password');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // РОЗБЛОКУВАННЯ ПО ПІН-КОДУ
   const handlePinUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await api.post('/auth/pin-login', {
-        email: email,
+      await api.post('/auth/pin-login', {
+        email,
         pin: pin.join(''),
       });
 
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
       localStorage.setItem('savedEmail', email);
       setAttemptsLeft(3);
 
-      router.push('/wallet');
-    } catch (err: any) {
+      await redirectAfterLogin();
+    } catch (err: unknown) {
       const newAttempts = attemptsLeft - 1;
       setAttemptsLeft(newAttempts);
       setPin(['', '', '', '']);
       pinRefs.current[0]?.focus();
 
       if (newAttempts <= 0) {
-        // Якщо спроби закінчилися - скидаємо гаманець (потім додати reset wallet з бекенду)
         localStorage.removeItem('savedEmail');
-        localStorage.removeItem('accessToken');
         setIsDeviceRecognized(false);
         setAttemptsLeft(3);
-        setError(
-          'Too many failed attempts. Your wallet has been locked. Please sign in with your password.',
-        );
+        setError('Too many failed attempts. Please sign in with your password.');
       } else {
-        setError(`Incorrect PIN. ${newAttempts} attempts left.`);
+        const baseMessage = extractErrorMessage(err, 'Incorrect PIN');
+        setError(`${baseMessage}. ${newAttempts} attempts left.`);
       }
     } finally {
       setIsLoading(false);
@@ -146,11 +154,6 @@ export function LoginForm() {
               <CardDescription className='text-muted-foreground'>
                 Enter your PIN to unlock your wallet
               </CardDescription>
-              {error && (
-                <div className='mt-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md text-center'>
-                  {error}
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -160,20 +163,18 @@ export function LoginForm() {
               <CardDescription className='text-muted-foreground'>
                 Access your Enterprise EUDI Wallet securely
               </CardDescription>
-              {error && (
-                <div className='mt-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md text-center'>
-                  {error}
-                </div>
-              )}
             </>
+          )}
+          {error && (
+            <div className='mt-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md text-center'>
+              {error}
+            </div>
           )}
         </div>
       </CardHeader>
       <CardContent>
         {isDeviceRecognized ? (
-          /* PIN Unlock State */
           <form onSubmit={handlePinUnlock} className='space-y-5'>
-            {/* User Avatar/Indicator */}
             <div className='flex flex-col items-center gap-3 pb-2'>
               <div className='flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border-2 border-accent/20 uppercase'>
                 <span className='text-2xl font-semibold text-accent'>
@@ -183,7 +184,6 @@ export function LoginForm() {
               <p className='text-sm text-muted-foreground'>{email}</p>
             </div>
 
-            {/* PIN Field */}
             <div className='space-y-2'>
               <div className='flex justify-center gap-3' onPaste={handlePinPaste}>
                 {pin.map((digit, index) => (
@@ -210,7 +210,6 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* Attempts Left */}
             <div className='flex items-center justify-center gap-2 text-sm'>
               <AlertCircle
                 className={cn(
@@ -225,7 +224,6 @@ export function LoginForm() {
               </span>
             </div>
 
-            {/* Unlock Button */}
             <Button
               type='submit'
               className='w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-medium'
@@ -244,7 +242,6 @@ export function LoginForm() {
               )}
             </Button>
 
-            {/* Switch to Password Login */}
             <p className='text-center text-sm text-muted-foreground'>
               Not you?{' '}
               <button
@@ -257,9 +254,7 @@ export function LoginForm() {
             </p>
           </form>
         ) : (
-          /* Full Login State */
           <form onSubmit={handlePasswordLogin} className='space-y-5'>
-            {/* Email Field */}
             <div className='space-y-2'>
               <Label htmlFor='email' className='text-sm font-medium text-foreground'>
                 Email address
@@ -278,7 +273,6 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* Password Field */}
             <div className='space-y-2'>
               <div className='flex items-center justify-between'>
                 <Label htmlFor='password' className='text-sm font-medium text-foreground'>
@@ -314,7 +308,6 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* Sign In Button */}
             <Button
               type='submit'
               className='w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-medium'
@@ -330,7 +323,6 @@ export function LoginForm() {
               )}
             </Button>
 
-            {/* Create Account Link */}
             <p className='text-center text-sm text-muted-foreground'>
               {"Don't have an account?"}{' '}
               <a
@@ -345,4 +337,14 @@ export function LoginForm() {
       </CardContent>
     </Card>
   );
+}
+
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const response = (err as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message[0] ?? fallback;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
 }

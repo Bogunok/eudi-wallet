@@ -58,22 +58,19 @@ export function RegistrationForm() {
     setError('');
 
     try {
-      const response = await api.post('/auth/register', {
-        email: email,
-        password: password,
+      await api.post('/auth/register', {
+        email,
+        password,
         pin: pin.join(''),
       });
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('savedEmail', email);
 
-      router.push('/login');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error occured. Try again');
+      localStorage.setItem('savedEmail', email);
+      router.push('/wallet');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Error occurred. Try again'));
     } finally {
       setIsLoading(false);
     }
-    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
   };
 
   const isFormValid = email && password.length >= 8 && pin.every(d => d !== '');
@@ -95,7 +92,6 @@ export function RegistrationForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className='space-y-5'>
-          {/* Email Field */}
           <div className='space-y-2'>
             <Label htmlFor='email' className='text-sm font-medium text-foreground'>
               Email address
@@ -114,7 +110,6 @@ export function RegistrationForm() {
             </div>
           </div>
 
-          {/* Password Field */}
           <div className='space-y-2'>
             <Label htmlFor='password' className='text-sm font-medium text-foreground'>
               Password
@@ -143,7 +138,6 @@ export function RegistrationForm() {
             <p className='text-xs text-muted-foreground'>Must be at least 8 characters long</p>
           </div>
 
-          {/* PIN Field */}
           <div className='space-y-2'>
             <Label className='text-sm font-medium text-foreground flex items-center gap-2'>
               <Shield className='h-4 w-4 text-accent' />
@@ -178,10 +172,9 @@ export function RegistrationForm() {
           </div>
           {error && (
             <div className='p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium text-center'>
-              {Array.isArray(error) ? error[0] : error}
+              {error}
             </div>
           )}
-          {/* Submit Button */}
           <Button
             type='submit'
             className='w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-medium'
@@ -200,11 +193,10 @@ export function RegistrationForm() {
             )}
           </Button>
 
-          {/* Sign In Link */}
           <p className='text-center text-sm text-muted-foreground'>
             Already have an account?{' '}
             <a
-              href='#'
+              href='/login'
               className='font-medium text-foreground hover:text-accent transition-colors underline underline-offset-4'
             >
               Sign in
@@ -214,4 +206,14 @@ export function RegistrationForm() {
       </CardContent>
     </Card>
   );
+}
+
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const response = (err as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message[0] ?? fallback;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
 }

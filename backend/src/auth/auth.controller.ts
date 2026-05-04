@@ -84,8 +84,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Login using 4-digit PIN' })
   @ApiResponse({ status: 200, description: 'Successfully logged in with PIN.' })
   @ApiResponse({ status: 401, description: 'Invalid PIN or email.' })
-  async pinLogin(@Body() dto: PinLoginDto) {
-    return this.authService.pinLogin(dto);
+  async pinLogin(@Body() dto: PinLoginDto, @Res({ passthrough: true }) res: Response) {
+    const tokens = await this.authService.pinLogin(dto);
+    this.setCookies(res, tokens.accessToken, tokens.refreshToken);
+    return { message: 'Logged in successfully' };
   }
 
   @Public()
