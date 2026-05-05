@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Req, Patch } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { ChangePinDto } from './dto/change-pin.dto';
 import {
@@ -41,7 +41,6 @@ export class WalletController {
     return this.walletService.createDid(req.user.id, pin);
   }*/
 
-  /*comment for a while because there is the same in User.controller
   @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Change wallet PIN code' })
   @ApiResponse({ status: 200, description: 'PIN changed successfully.' })
@@ -52,7 +51,7 @@ export class WalletController {
   @Patch('change-pin')
   async updatePin(@Req() req, @Body() dto: ChangePinDto) {
     return this.walletService.changePin(req.user.id, dto.oldPin, dto.newPin);
-  }*/
+  }
 
   @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Reset wallet (delete DID and VC)' })

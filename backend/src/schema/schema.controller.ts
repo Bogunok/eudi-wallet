@@ -44,6 +44,13 @@ export class SchemaController {
     return this.schemaService.findAllSchemasByIssuer(issuerId);
   }
 
+  @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Get all available schemas from all trusted issuers (for Holder)' })
+  @Get('available')
+  async getAvailableSchemas() {
+    return this.schemaService.findAllAvailableSchemas();
+  }
+
   // перегляд схеми (для всіх)
   @ApiOperation({ summary: 'Get public schema structure (For all)' })
   @ApiParam({ name: 'schemaId', description: 'ID of the schema from database' })
@@ -53,12 +60,5 @@ export class SchemaController {
   @Get(':schemaId')
   async getSchema(@Param('schemaId') schemaId: string) {
     return this.schemaService.findSchemaById(schemaId);
-  }
-
-  @Auth(Role.HOLDER)
-  @ApiOperation({ summary: 'Get all available schemas from all trusted issuers (for Holder)' })
-  @Get('available')
-  async getAvailableSchemas() {
-    return this.schemaService.findAllAvailableSchemas();
   }
 }

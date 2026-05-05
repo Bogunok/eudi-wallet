@@ -2,18 +2,29 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Wallet, FileBadge, Building2, LayoutDashboard } from 'lucide-react';
+import { Wallet, FileBadge, Building2, LayoutDashboard, Bell, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import api from '@/lib/api';
 
 const NAV_ITEMS = [
   { href: '/wallet', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/wallet/credentials', label: 'Credentials', icon: FileBadge },
   { href: '/wallet/organization', label: 'Organization', icon: Building2 },
-  // TODO:Notifications, Settings
+  { href: '/wallet/notifications', label: 'Notifications', icon: Bell },
+  { href: '/wallet/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    api
+      .get<{ unreadCount: number }>('/notifications/unread-count')
+      .then(res => setUnreadCount(res.data.unreadCount))
+      .catch(() => {});
+  }, [pathname]); // Оновлюємо лічильник при кожній навігації
 
   return (
     <aside className='hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col'>
@@ -30,6 +41,7 @@ export function Sidebar() {
           const isActive = item.exact
             ? pathname === item.href
             : pathname === item.href || pathname.startsWith(item.href + '/');
+          const isNotifications = item.href === '/wallet/notifications';
 
           return (
             <Link
@@ -43,7 +55,12 @@ export function Sidebar() {
               )}
             >
               <Icon className='h-4 w-4' />
-              {item.label}
+              <span className='flex-1'>{item.label}</span>
+              {isNotifications && unreadCount > 0 && (
+                <span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-foreground'>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
