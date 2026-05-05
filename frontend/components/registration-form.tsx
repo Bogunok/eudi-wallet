@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { unlock } from '@/lib/wallet-lock';
 
 export function RegistrationForm() {
   const [email, setEmail] = useState('');
@@ -65,6 +66,7 @@ export function RegistrationForm() {
       });
 
       localStorage.setItem('savedEmail', email);
+      unlock();
       router.push('/wallet');
     } catch (err: unknown) {
       setError(extractErrorMessage(err, 'Error occurred. Try again'));

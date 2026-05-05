@@ -97,8 +97,14 @@ export class IssuerService {
     }
 
     if (request.schema.name === 'LegalEntityIdentifier') {
-      const declaredLei = claimData.leiCode || claimData.lei || holderOrg.lei;
-      const declaredName = claimData.companyName || claimData.name || holderOrg.name;
+      const data = claimData as {
+        leiCode?: string;
+        lei?: string;
+        companyName?: string;
+        name?: string;
+      };
+      const declaredLei = data.leiCode || data.lei || holderOrg.lei;
+      const declaredName = data.companyName || data.name || holderOrg.name;
 
       try {
         const isDataValid = await this.gleifMock.verifyOrganization(declaredLei, declaredName);

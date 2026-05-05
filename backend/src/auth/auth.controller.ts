@@ -24,6 +24,7 @@ import { Auth } from '../auth/decorators/auth.decorator';
 import { Role } from '@prisma/client';
 import { RegisterVerifierDto } from './dto/register-verifier.dto';
 import { PinLoginDto } from './dto/pin-login.dto';
+import { ResetAccountDto } from './dto/reset-account.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -119,6 +120,18 @@ export class AuthController {
     res.clearCookie('refreshToken');
 
     return { message: 'Logged out successfully' };
+  }
+
+  @Public()
+  @Post('reset-account')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Permanently delete account after PIN lockout' })
+  @ApiResponse({ status: 204, description: 'Account deleted successfully.' })
+  @ApiResponse({ status: 401, description: 'Invalid email or password.' })
+  async resetAccount(@Body() dto: ResetAccountDto, @Res({ passthrough: true }) res: Response) {
+    await this.authService.resetAccount(dto);
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
   }
 
   private setCookies(res: Response, accessToken: string, refreshToken: string) {

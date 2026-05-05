@@ -86,14 +86,6 @@ export default function CredentialsListPage() {
     <div className='space-y-6'>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
         <PageHeader />
-        {credentials.length > 0 && (
-          <Button asChild>
-            <Link href='/wallet/credentials/request'>
-              <Plus className='h-4 w-4' />
-              Add document
-            </Link>
-          </Button>
-        )}
       </div>
 
       {vcLoading ? (

@@ -1,4 +1,5 @@
 import api from './api';
+import { lock } from './wallet-lock';
 
 export type Role = 'HOLDER' | 'ISSUER' | 'VERIFIER' | 'ADMIN';
 
@@ -27,10 +28,18 @@ export async function logout(): Promise<void> {
   try {
     await api.post('/auth/logout', {});
   } catch {}
+  lock();
   if (typeof window !== 'undefined') {
-    // savedEmail запам'ятати пристрій для PIN-логіну
-    // localStorage.removeItem('savedEmail');
     window.location.href = '/login';
+  }
+}
+
+export async function resetAccount(email: string, password: string): Promise<void> {
+  await api.post('/auth/reset-account', { email, password });
+
+  lock();
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('savedEmail');
   }
 }
 

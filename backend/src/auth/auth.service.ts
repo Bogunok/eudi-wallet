@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterIssuerDto } from './dto/register-issuer.dto';
 import { PinLoginDto } from './dto/pin-login.dto';
+import { ResetAccountDto } from './dto/reset-account.dto';
 
 @Injectable()
 export class AuthService {
@@ -217,5 +218,32 @@ export class AuthService {
       where: { id: userId, refreshToken: { not: null } },
       data: { refreshToken: null },
     });
+  }
+
+  async resetAccount(dto: ResetAccountDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      include: {
+        schemas: { select: { id: true } },
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.role === 'ISSUER' && user.schemas.length > 0) {
+      throw new ForbiddenException(
+        'Issuers with created schemas cannot reset their account. ' +
+          'Please contact administrator.',
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id: user.id } });
   }
 }

@@ -78,7 +78,7 @@ model DidDocument {
   encryptionIv        String // Вектор ініціалізації (IV) для AES-GCM
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   deactivatedAt       DateTime?
 }
@@ -95,19 +95,19 @@ model VerifiableCredential {
   expiresAt      DateTime?
   //Зв'язок з власником гаманця (користувачем)
   userId         String
-  user           User                       @relation(fields: [userId], references: [id])
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   //Зв'язок з організацією (юридичною особою)
   organizationId String?
-  organization   Organization?              @relation(fields: [organizationId], references: [id])
+  organization   Organization?              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime                   @default(now())
 }
 
 model VerifiableCredentialRequest {
   id          String   @id @default(uuid())
   holderId    String
-  holder      User     @relation("HolderRequests", fields: [holderId], references: [id])
+  holder      User     @relation("HolderRequests", fields: [holderId], references: [id], onDelete: Cascade)
   issuerId    String
-  issuer      User     @relation("IssuerRequests", fields: [issuerId], references: [id])
+  issuer      User     @relation("IssuerRequests", fields: [issuerId], references: [id], onDelete: Cascade)
   schemaId    String
   schema      VerifiableCredentialSchema @relation(fields: [schemaId], references: [id])
   claimData   Json
@@ -124,7 +124,7 @@ model Organization {
 
   // Зв'язок з представником
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Видані документи цій організації
   credentials VerifiableCredential[]
@@ -140,7 +140,7 @@ model VerifiableCredentialSchema {
   structure Json
 
   issuerId String
-  issuer   User   @relation(fields: [issuerId], references: [id])
+  issuer   User   @relation(fields: [issuerId], references: [id], onDelete: Cascade)
 
   verifiableCredentialRequests VerifiableCredentialRequest[]
 }
@@ -160,7 +160,7 @@ model VerificationSession {
   presentedData Json? // Дані, які надіслав користувач, якщо перевірка успішна
 
   verifierId String
-  verifier   User   @relation(fields: [verifierId], references: [id])
+  verifier   User   @relation(fields: [verifierId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 }

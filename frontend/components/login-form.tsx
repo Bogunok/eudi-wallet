@@ -3,20 +3,33 @@
 import { useState, useRef, type ChangeEvent, type KeyboardEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
-import { getCurrentUser, defaultRouteForRole } from '@/lib/auth';
-import { Mail, Eye, EyeOff, Lock, Wallet, AlertCircle } from 'lucide-react';
+import { getCurrentUser, defaultRouteForRole, resetAccount } from '@/lib/auth';
+import { unlock } from '@/lib/wallet-lock';
+import {
+  Mail,
+  Eye,
+  EyeOff,
+  Lock,
+  Wallet,
+  AlertCircle,
+  ShieldAlert,
+  Trash2,
+  ArrowLeft,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+type FormMode = 'password' | 'pin' | 'locked' | 'reset-confirm';
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get('next');
 
-  const [isDeviceRecognized, setIsDeviceRecognized] = useState(false);
+  const [mode, setMode] = useState<FormMode>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,13 +38,18 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [resetPassword, setResetPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
   const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     const savedEmail = localStorage.getItem('savedEmail');
     if (savedEmail) {
       setEmail(savedEmail);
-      setIsDeviceRecognized(true);
+      setMode('pin');
+    } else {
+      setMode('password');
     }
   }, []);
 
@@ -47,6 +65,8 @@ export function LoginForm() {
       router.push('/wallet');
     }
   };
+
+  // -- PIN handlers --
 
   const handlePinChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -78,6 +98,8 @@ export function LoginForm() {
     }
   };
 
+  // -- Submit handlers --
+
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -85,13 +107,11 @@ export function LoginForm() {
 
     try {
       await api.post('/auth/login', { email, password });
-
       localStorage.setItem('savedEmail', email);
-
+      unlock();
       await redirectAfterLogin();
     } catch (err: unknown) {
-      const message = extractErrorMessage(err, 'Invalid email or password');
-      setError(message);
+      setError(extractErrorMessage(err, 'Invalid email or password'));
     } finally {
       setIsLoading(false);
     }
@@ -103,65 +123,122 @@ export function LoginForm() {
     setError('');
 
     try {
-      await api.post('/auth/pin-login', {
-        email,
-        pin: pin.join(''),
-      });
-
+      await api.post('/auth/pin-login', { email, pin: pin.join('') });
       localStorage.setItem('savedEmail', email);
+      unlock();
       setAttemptsLeft(3);
-
       await redirectAfterLogin();
     } catch (err: unknown) {
       const newAttempts = attemptsLeft - 1;
       setAttemptsLeft(newAttempts);
       setPin(['', '', '', '']);
-      pinRefs.current[0]?.focus();
 
       if (newAttempts <= 0) {
-        localStorage.removeItem('savedEmail');
-        setIsDeviceRecognized(false);
+        setMode('locked');
         setAttemptsLeft(3);
-        setError('Too many failed attempts. Please sign in with your password.');
+        setError('');
       } else {
         const baseMessage = extractErrorMessage(err, 'Incorrect PIN');
         setError(`${baseMessage}. ${newAttempts} attempts left.`);
+        pinRefs.current[0]?.focus();
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const switchToPasswordLogin = () => {
-    setIsDeviceRecognized(false);
+  const handleResetConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await resetAccount(email, resetPassword);
+      router.push('/register');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Invalid password. Please try again.'));
+      setIsLoading(false);
+    }
+  };
+
+  // -- Mode switchers --
+
+  const switchToResetConfirm = () => {
+    setMode('reset-confirm');
+    setError('');
+    setResetPassword('');
+  };
+
+  const cancelReset = () => {
+    setMode('locked');
+    setError('');
+  };
+
+  const switchToPasswordFromPin = () => {
+    setMode('password');
     setPin(['', '', '', '']);
     setError('');
   };
 
+  // -- Validation --
+
   const isPasswordFormValid = email && password.length >= 8;
   const isPinValid = pin.every(d => d !== '');
+  const isResetValid = resetPassword.length >= 8;
+
+  // -- Render --
 
   return (
     <Card className='w-full max-w-md border-0 shadow-xl shadow-foreground/5'>
       <CardHeader className='space-y-3 pb-6'>
-        <div className='mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary'>
-          <Wallet className='h-7 w-7 text-primary-foreground' />
+        <div
+          className={cn(
+            'mx-auto flex h-14 w-14 items-center justify-center rounded-2xl',
+            mode === 'locked' || mode === 'reset-confirm' ? 'bg-destructive' : 'bg-primary',
+          )}
+        >
+          {mode === 'locked' || mode === 'reset-confirm' ? (
+            <ShieldAlert className='h-7 w-7 text-destructive-foreground' />
+          ) : (
+            <Wallet className='h-7 w-7 text-primary-foreground' />
+          )}
         </div>
         <div className='space-y-1.5 text-center'>
-          {isDeviceRecognized ? (
+          {mode === 'pin' && (
             <>
               <CardTitle className='text-2xl font-semibold tracking-tight'>Welcome back</CardTitle>
               <CardDescription className='text-muted-foreground'>
                 Enter your PIN to unlock your wallet
               </CardDescription>
             </>
-          ) : (
+          )}
+          {mode === 'password' && (
             <>
               <CardTitle className='text-2xl font-semibold tracking-tight'>
                 Sign in to your wallet
               </CardTitle>
               <CardDescription className='text-muted-foreground'>
                 Access your Enterprise EUDI Wallet securely
+              </CardDescription>
+            </>
+          )}
+          {mode === 'locked' && (
+            <>
+              <CardTitle className='text-2xl font-semibold tracking-tight text-destructive'>
+                Wallet locked
+              </CardTitle>
+              <CardDescription className='text-muted-foreground'>
+                Too many incorrect PIN attempts
+              </CardDescription>
+            </>
+          )}
+          {mode === 'reset-confirm' && (
+            <>
+              <CardTitle className='text-2xl font-semibold tracking-tight'>
+                Reset your wallet
+              </CardTitle>
+              <CardDescription className='text-muted-foreground'>
+                This action is irreversible
               </CardDescription>
             </>
           )}
@@ -172,8 +249,10 @@ export function LoginForm() {
           )}
         </div>
       </CardHeader>
+
       <CardContent>
-        {isDeviceRecognized ? (
+        {/* MODE: PIN */}
+        {mode === 'pin' && (
           <form onSubmit={handlePinUnlock} className='space-y-5'>
             <div className='flex flex-col items-center gap-3 pb-2'>
               <div className='flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border-2 border-accent/20 uppercase'>
@@ -241,19 +320,11 @@ export function LoginForm() {
                 </div>
               )}
             </Button>
-
-            <p className='text-center text-sm text-muted-foreground'>
-              Not you?{' '}
-              <button
-                type='button'
-                onClick={switchToPasswordLogin}
-                className='font-medium text-foreground hover:text-accent transition-colors underline underline-offset-4'
-              >
-                Sign in with password
-              </button>
-            </p>
           </form>
-        ) : (
+        )}
+
+        {/* MODE: PASSWORD */}
+        {mode === 'password' && (
           <form onSubmit={handlePasswordLogin} className='space-y-5'>
             <div className='space-y-2'>
               <Label htmlFor='email' className='text-sm font-medium text-foreground'>
@@ -278,12 +349,6 @@ export function LoginForm() {
                 <Label htmlFor='password' className='text-sm font-medium text-foreground'>
                   Password
                 </Label>
-                <a
-                  href='#'
-                  className='text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4'
-                >
-                  Forgot password?
-                </a>
               </div>
               <div className='relative'>
                 <Lock className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
@@ -332,6 +397,110 @@ export function LoginForm() {
                 Create wallet
               </a>
             </p>
+          </form>
+        )}
+
+        {/* MODE: LOCKED */}
+        {mode === 'locked' && (
+          <div className='space-y-5'>
+            <div className='rounded-lg bg-destructive/5 border border-destructive/20 p-4 text-sm text-foreground'>
+              <p className='font-medium'>Your wallet is locked for security reasons.</p>
+              <p className='mt-2 text-muted-foreground'>
+                According to the EUDI standard, the PIN code cannot be recovered. To regain access,
+                you must reset your wallet — this will permanently delete your account, all DIDs,
+                credentials and organization data.
+              </p>
+            </div>
+
+            <Button
+              type='button'
+              onClick={switchToResetConfirm}
+              className='mx-auto flex w-fit items-center h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium'
+            >
+              <Trash2 className='h-4 w-4' />
+              Reset wallet
+            </Button>
+
+            <button
+              type='button'
+              onClick={() => router.push('/')}
+              className='w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors'
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* MODE: RESET CONFIRM */}
+        {mode === 'reset-confirm' && (
+          <form onSubmit={handleResetConfirm} className='space-y-5'>
+            <div className='rounded-lg bg-destructive/5 border border-destructive/20 p-4 text-sm'>
+              <p className='font-medium text-destructive'>This will permanently delete:</p>
+              <ul className='mt-2 ml-4 list-disc space-y-0.5 text-muted-foreground'>
+                <li>Your account ({email})</li>
+                <li>All issued credentials (VC)</li>
+                <li>Your decentralized identifiers (DID)</li>
+                <li>Your organization profile</li>
+              </ul>
+              <p className='mt-2 text-muted-foreground'>Enter your password to confirm.</p>
+            </div>
+
+            <div className='space-y-2'>
+              <Label htmlFor='reset-password' className='text-sm font-medium'>
+                Password
+              </Label>
+              <div className='relative'>
+                <Lock className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+                <Input
+                  id='reset-password'
+                  type={showResetPassword ? 'text' : 'password'}
+                  placeholder='Enter your password'
+                  value={resetPassword}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setResetPassword(e.target.value)}
+                  className='h-11 pl-10 pr-10 bg-input border-border focus:border-ring focus:ring-ring/20'
+                  minLength={8}
+                  required
+                  autoFocus
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                  className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors'
+                  aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showResetPassword ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type='submit'
+              variant='destructive'
+              className='w-full h-11 font-medium'
+              disabled={!isResetValid || isLoading}
+            >
+              {isLoading ? (
+                <div className='flex items-center gap-2'>
+                  <div className='h-4 w-4 animate-spin rounded-full border-2 border-destructive-foreground/30 border-t-destructive-foreground' />
+                  Resetting...
+                </div>
+              ) : (
+                <>
+                  <Trash2 className='h-4 w-4' />
+                  Permanently delete wallet
+                </>
+              )}
+            </Button>
+
+            <button
+              type='button'
+              onClick={cancelReset}
+              className='flex items-center justify-center gap-1 w-full text-sm text-muted-foreground hover:text-foreground transition-colors'
+              disabled={isLoading}
+            >
+              <ArrowLeft className='h-3 w-3' />
+              Back
+            </button>
           </form>
         )}
       </CardContent>
