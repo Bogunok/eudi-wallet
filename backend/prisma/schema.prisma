@@ -20,6 +20,17 @@ enum RequestStatus {
   REJECTED
 }
 
+enum RevocationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RevocationRequestType {
+  REVOCATION 
+  UPDATE     
+}
+
 enum VerifiableCredentialStatus {
   ACTIVE
   REVOKED
@@ -64,6 +75,8 @@ model User {
 
   sentRequests VerifiableCredentialRequest[] @relation("HolderRequests")
   receivedRequests VerifiableCredentialRequest[] @relation("IssuerRequests")
+  holderRevocationRequests RevocationRequest[] @relation("HolderRevocationRequests")
+  issuerRevocationRequests RevocationRequest[] @relation("IssuerRevocationRequests")
   notifications Notification[] 
 }
 
@@ -100,6 +113,7 @@ model VerifiableCredential {
   organizationId String?
   organization   Organization?              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime                   @default(now())
+  revocationRequests RevocationRequest[]
 }
 
 model VerifiableCredentialRequest {
@@ -114,6 +128,29 @@ model VerifiableCredentialRequest {
   status      RequestStatus @default(PENDING)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model RevocationRequest {
+  id        String                  @id @default(uuid())
+  type      RevocationRequestType   @default(REVOCATION)
+  status    RevocationRequestStatus @default(PENDING)
+
+  vcId      String
+  vc        VerifiableCredential @relation(fields: [vcId], references: [id], onDelete: Cascade)
+
+  // Хто просить
+  holderId  String
+  holder    User @relation("HolderRevocationRequests", fields: [holderId], references: [id], onDelete: Cascade)
+
+  // До кого звертається
+  issuerId  String
+  issuer    User @relation("IssuerRevocationRequests", fields: [issuerId], references: [id], onDelete: Cascade)
+
+  // Нові дані (тільки для UPDATE)
+  newClaimData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Organization {

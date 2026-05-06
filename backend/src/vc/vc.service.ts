@@ -48,6 +48,17 @@ export class VcService {
     return credential;
   }
 
+  async findByIssuerDid(issuerDid: string) {
+    return this.prisma.verifiableCredential.findMany({
+      where: { issuerDid },
+      include: {
+        organization: { select: { name: true, lei: true } },
+        user: { select: { email: true } },
+      },
+      orderBy: { issuedAt: 'desc' },
+    });
+  }
+
   //Локальне видалення документа
   async deleteCredentialLocally(id: string, userId: string) {
     const credential = await this.findCredentialById(id, userId);

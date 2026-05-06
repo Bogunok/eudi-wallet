@@ -206,6 +206,21 @@ export class UserService {
     return { message: 'PIN code successfully changed' };
   }
 
+  async setInitialPin(userId: string, newPin: string): Promise<void> {
+    const user = await this.findOneById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.pin !== '') {
+      throw new BadRequestException('PIN is already set. Use change-pin instead.');
+    }
+
+    const hashedPin = await bcrypt.hash(newPin, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { pin: hashedPin },
+    });
+  }
+
   async changeEmail(userId: string, dto: ChangeEmailDto) {
     const user = await this.findOneById(userId);
     if (!user) throw new NotFoundException('User not found');

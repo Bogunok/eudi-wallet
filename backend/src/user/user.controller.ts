@@ -13,6 +13,7 @@ import {
   NotFoundException,
   ClassSerializerInterceptor,
   UseInterceptors,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -39,6 +40,7 @@ import { FindAllUsersQueryDto } from './dto/user-query.dto';
 import { USER_CONTROLLER_MESSAGES } from './user.constants';
 import { CreateUserByAdminDto, UpdateUserByAdminDto } from './dto/admin-user.dto';
 import { UserEntity } from './entities/user.entity';
+import { SetPinDto } from './dto/set-pin.dto';
 
 export interface UserPayload {
   id: string;
@@ -172,6 +174,15 @@ export class UserController {
       message: USER_CONTROLLER_MESSAGES.CHANGE_PIN.SUCCESS.EN,
       data: null,
     };
+  }
+
+  // allows user to set PIN for the first time after registration (if they registered with email/password and didn't set PIN during registration)
+  // for issuer and verifier
+  @Auth()
+  @Post('set-pin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async setPin(@Req() req: any, @Body() dto: SetPinDto) {
+    await this.userService.setInitialPin(req.user.id, dto.pin);
   }
 
   @Auth()

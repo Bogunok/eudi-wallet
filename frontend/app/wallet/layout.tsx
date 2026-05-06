@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/wallet/sidebar';
 import { UserMenu } from '@/components/wallet/user-menu';
 import { isUnlocked } from '@/lib/wallet-lock';
+import { getCurrentUser, defaultRouteForRole } from '@/lib/auth';
 
 export default function WalletLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -17,7 +18,18 @@ export default function WalletLayout({ children }: { children: ReactNode }) {
       router.replace(`/login?next=${encodeURIComponent(next)}`);
       return;
     }
-    setChecked(true);
+
+    getCurrentUser().then(user => {
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      if (user.role !== 'HOLDER') {
+        router.replace(defaultRouteForRole(user.role));
+        return;
+      }
+      setChecked(true);
+    });
   }, [router, pathname]);
 
   if (!checked) {
@@ -28,7 +40,6 @@ export default function WalletLayout({ children }: { children: ReactNode }) {
     <div className='flex min-h-screen bg-background'>
       <Sidebar />
       <div className='flex min-w-0 flex-1 flex-col'>
-        {/* Top bar */}
         <header className='flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur'>
           <div className='lg:hidden'>
             <span className='font-semibold'>EUDI Wallet</span>
@@ -36,8 +47,6 @@ export default function WalletLayout({ children }: { children: ReactNode }) {
           <div className='hidden lg:block' />
           <UserMenu />
         </header>
-
-        {/* Page content */}
         <main className='flex-1 overflow-y-auto px-6 py-8'>
           <div className='mx-auto max-w-5xl'>{children}</div>
         </main>

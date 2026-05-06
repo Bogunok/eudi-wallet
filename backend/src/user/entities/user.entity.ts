@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Exclude } from 'class-transformer';
+import { Exclude, Transform, Expose } from 'class-transformer';
 import { User, Role } from '@prisma/client';
 
-export class UserEntity implements User {
+export class UserEntity implements Omit<User, 'hasPinSet'> {
   @ApiProperty({
     description: 'Unique identifier for the user',
     example: '550e8400-e29b-41d4-a716-446655440000',
@@ -20,6 +20,14 @@ export class UserEntity implements User {
 
   @Exclude()
   pin: string;
+
+  @ApiProperty({
+    description: 'Whether the user has set up a PIN',
+    example: true,
+  })
+  @Expose()
+  @Transform(({ obj }) => obj.pin !== '')
+  hasPinSet: boolean;
 
   @Exclude()
   pinAttempts: number;

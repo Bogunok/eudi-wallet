@@ -1,23 +1,75 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+const ADMIN_EMAIL = 'admin@eudi-wallet.eu';
+const ADMIN_PASSWORD = 'Admin1234!';
+const ADMIN_PIN = '0000';
+
+const ISSUER_EMAIL = 'registry@eudi-wallet.eu';
+const ISSUER_PASSWORD = 'Issuer1234!';
+const ISSUER_PIN = '1111';
 
 async function main() {
   console.log('Start filling the database...');
 
-  const systemIssuer = await prisma.user.upsert({
-    where: { email: 'registry@eudi-wallet.eu' },
+  // --- Admin ---
+  const adminPasswordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  const adminPinHash = await bcrypt.hash(ADMIN_PIN, 10);
+
+  const admin = await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
     update: {},
     create: {
-      email: 'registry@eudi-wallet.eu',
-      password: 'hashed_password_mock',
-      role: 'ISSUER',
-      pin: '1234',
+      email: ADMIN_EMAIL,
+      password: adminPasswordHash,
+      pin: adminPinHash,
+      role: 'ADMIN',
     },
   });
+  console.log(`Admin created: ${admin.email} / password: ${ADMIN_PASSWORD} / PIN: ${ADMIN_PIN}`);
 
-  console.log(`System issuer has been created: ${systemIssuer.email}`);
+  // --- System Issuer ---
+  const issuerPasswordHash = await bcrypt.hash(ISSUER_PASSWORD, 10);
+  const issuerPinHash = await bcrypt.hash(ISSUER_PIN, 10);
 
+  const systemIssuer = await prisma.user.upsert({
+    where: { email: ISSUER_EMAIL },
+    update: {
+      password: issuerPasswordHash,
+      pin: issuerPinHash,
+    },
+    create: {
+      email: ISSUER_EMAIL,
+      password: issuerPasswordHash,
+      pin: issuerPinHash,
+      role: 'ISSUER',
+    },
+  });
+  console.log(
+    `Issuer created: ${systemIssuer.email} / password: ${ISSUER_PASSWORD} / PIN: ${ISSUER_PIN}`,
+  );
+
+  const existingOrg = await prisma.organization.findFirst({
+    where: { userId: systemIssuer.id },
+  });
+
+  if (!existingOrg) {
+    await prisma.organization.create({
+      data: {
+        lei: '00000000000000000000',
+        name: 'EUDI System Registry',
+        country: 'EU',
+        userId: systemIssuer.id,
+      },
+    });
+    console.log('Organization for Issuer created: EUDI System Registry');
+  } else {
+    console.log('Organization for Issuer already exists');
+  }
+
+  // --- Schemas ---
   const schemasToSeed = [
     {
       name: 'Legal Entity Identifier',
@@ -65,13 +117,15 @@ async function main() {
           issuerId: systemIssuer.id,
         },
       });
-      console.log(`Schema [${schema.name}] is added successfully.`);
+      console.log(`Schema [${schema.name}] added.`);
     } else {
       console.log(`Schema [${schema.name}] already exists.`);
     }
   }
 
-  console.log('Database filled!');
+  console.log('\n=== Seed completed! ===');
+  console.log(`Admin:  ${ADMIN_EMAIL} / ${ADMIN_PASSWORD} / PIN: ${ADMIN_PIN}`);
+  console.log(`Issuer: ${ISSUER_EMAIL} / ${ISSUER_PASSWORD} / PIN: ${ISSUER_PIN}`);
 }
 
 main()

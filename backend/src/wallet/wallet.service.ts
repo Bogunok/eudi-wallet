@@ -274,6 +274,87 @@ export class WalletService {
     }
   }
 
+  async requestRevocation(holderId: string, vcId: string) {
+    const vc = await this.prisma.verifiableCredential.findUnique({
+      where: { id: vcId },
+    });
+    if (!vc) throw new NotFoundException('Credential not found');
+    if (vc.userId !== holderId) throw new ForbiddenException('Not your credential');
+    if (vc.status !== 'ACTIVE')
+      throw new BadRequestException('Only ACTIVE credentials can be revoked');
+
+    const issuerDidDoc = await this.prisma.didDocument.findUnique({
+      where: { did: vc.issuerDid },
+    });
+    if (!issuerDidDoc) throw new NotFoundException('Issuer DID not found');
+
+    const existing = await this.prisma.revocationRequest.findFirst({
+      where: { vcId, holderId, status: 'PENDING' },
+    });
+    if (existing) throw new BadRequestException('Revocation request already pending');
+
+    const vcType = Array.isArray(vc.type) && vc.type.length > 1 ? vc.type[1] : 'credential';
+
+    const request = await this.prisma.revocationRequest.create({
+      data: {
+        type: 'REVOCATION',
+        vcId,
+        holderId,
+        issuerId: issuerDidDoc.userId,
+      },
+    });
+
+    await this.notificationService.create({
+      userId: holderId,
+      title: 'Revocation request sent',
+      message: `Your revocation request for "${vcType}" has been submitted and is awaiting issuer review.`,
+      type: NotificationType.SYSTEM,
+    });
+
+    return request;
+  }
+
+  async requestUpdate(holderId: string, vcId: string, newClaimData: Record<string, unknown>) {
+    const vc = await this.prisma.verifiableCredential.findUnique({
+      where: { id: vcId },
+    });
+    if (!vc) throw new NotFoundException('Credential not found');
+    if (vc.userId !== holderId) throw new ForbiddenException('Not your credential');
+    if (vc.status !== 'ACTIVE')
+      throw new BadRequestException('Only ACTIVE credentials can be updated');
+
+    const issuerDidDoc = await this.prisma.didDocument.findUnique({
+      where: { did: vc.issuerDid },
+    });
+    if (!issuerDidDoc) throw new NotFoundException('Issuer DID not found');
+
+    const existing = await this.prisma.revocationRequest.findFirst({
+      where: { vcId, holderId, status: 'PENDING' },
+    });
+    if (existing) throw new BadRequestException('Revocation/Update request already pending');
+
+    const vcType = Array.isArray(vc.type) && vc.type.length > 1 ? vc.type[1] : 'credential';
+
+    const request = await this.prisma.revocationRequest.create({
+      data: {
+        type: 'UPDATE',
+        vcId,
+        holderId,
+        issuerId: issuerDidDoc.userId,
+        newClaimData: newClaimData as any,
+      },
+    });
+
+    await this.notificationService.create({
+      userId: holderId,
+      title: 'Update request sent',
+      message: `Your update request for "${vcType}" has been submitted. The issuer will review and re-issue a new credential.`,
+      type: NotificationType.SYSTEM,
+    });
+
+    return request;
+  }
+
   async signDocument(userId: string, dto: SignDocumentDto) {
     // Перевіряємо, чи існує LEI-документ і чи належить він цьому користувачу
     const credential = await this.prisma.verifiableCredential.findFirst({

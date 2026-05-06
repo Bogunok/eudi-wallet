@@ -34,10 +34,37 @@ export class IssuerService {
       include: {
         schema: true,
         holder: {
-          include: { organizations: true },
+          include: {
+            organizations: true,
+            didDocuments: {
+              where: { deactivatedAt: { equals: null } },
+              select: { did: true },
+              take: 1,
+            },
+          },
         },
       },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getIssuedCredentials(issuerId: string) {
+    const issuerDids = await this.prisma.didDocument.findMany({
+      where: { userId: issuerId },
+      select: { did: true },
+    });
+
+    if (issuerDids.length === 0) return [];
+
+    const dids = issuerDids.map(d => d.did);
+
+    return this.prisma.verifiableCredential.findMany({
+      where: { issuerDid: { in: dids } },
+      include: {
+        organization: { select: { name: true, lei: true } },
+        user: { select: { email: true } },
+      },
+      orderBy: { issuedAt: 'desc' },
     });
   }
 
@@ -241,6 +268,89 @@ export class IssuerService {
     };
   }
 
+  // private helper method to sign and save credential (when holder wants to update credential)
+  private async signAndSaveCredential(params: {
+    issuerId: string;
+    holderId: string;
+    holderOrgId: string;
+    schemaName: string;
+    claimData: Record<string, unknown>;
+    pin: string;
+  }): Promise<string> {
+    const { issuerId, holderId, holderOrgId, schemaName, claimData, pin } = params;
+
+    const issuerDidDoc = await this.prisma.didDocument.findFirst({
+      where: { userId: issuerId },
+    });
+    if (!issuerDidDoc) throw new NotFoundException('DID of the issuer not found');
+
+    const decryptedPrivateKeyBase64 = await this.didService.decryptWithPin(
+      issuerDidDoc.encryptedPrivateKey,
+      issuerDidDoc.encryptionSalt,
+      issuerDidDoc.encryptionIv,
+      pin,
+    );
+
+    const holderDidDoc = await this.prisma.didDocument.findFirst({
+      where: { userId: holderId },
+    });
+    if (!holderDidDoc) throw new BadRequestException('Organization has not set the DID yet');
+
+    const subjectDid = holderDidDoc.did;
+
+    const encodeBase64Url = (str: string | Buffer) =>
+      (typeof str === 'string' ? Buffer.from(str) : str).toString('base64url').replace(/=/g, '');
+
+    const disclosures: string[] = [];
+    const sdHashes: string[] = [];
+
+    for (const [key, value] of Object.entries(claimData)) {
+      const salt = crypto.randomBytes(16).toString('base64url').replace(/=/g, '');
+      const disclosureB64url = encodeBase64Url(JSON.stringify([salt, key, value]));
+      disclosures.push(disclosureB64url);
+      const hash = crypto.createHash('sha256').update(disclosureB64url).digest();
+      sdHashes.push(encodeBase64Url(hash));
+    }
+
+    const jwtPayload = {
+      iss: issuerDidDoc.did,
+      sub: subjectDid,
+      iat: Math.floor(Date.now() / 1000),
+      vct: schemaName,
+      _sd: sdHashes,
+      _sd_alg: 'sha-256',
+    };
+
+    const jwtHeader = { alg: 'EdDSA', typ: 'vc+sd-jwt', kid: issuerDidDoc.keyId };
+
+    const unsignedToken = `${encodeBase64Url(JSON.stringify(jwtHeader))}.${encodeBase64Url(JSON.stringify(jwtPayload))}`;
+
+    const privateKeyObj = crypto.createPrivateKey({
+      key: Buffer.from(decryptedPrivateKeyBase64, 'base64'),
+      format: 'der',
+      type: 'pkcs8',
+    });
+
+    const signature = crypto.sign(null, Buffer.from(unsignedToken), privateKeyObj);
+    const sdJwtToken = `${unsignedToken}.${encodeBase64Url(signature)}~${disclosures.join('~')}~`;
+
+    const issued = await this.prisma.verifiableCredential.create({
+      data: {
+        type: ['VerifiableCredential', schemaName],
+        issuerDid: issuerDidDoc.did,
+        subjectDid,
+        payload: jwtPayload,
+        rawJwt: sdJwtToken,
+        issuedAt: new Date(),
+        status: VerifiableCredentialStatus.ACTIVE,
+        userId: holderId,
+        organizationId: holderOrgId,
+      },
+    });
+
+    return issued.id;
+  }
+
   async revokeCredential(vcId: string, issuerId: string) {
     const vc = await this.prisma.verifiableCredential.findUnique({ where: { id: vcId } });
     if (!vc) throw new NotFoundException('Document not found');
@@ -264,5 +374,96 @@ export class IssuerService {
     });
 
     return revokedVc;
+  }
+
+  async getRevocationRequests(issuerId: string) {
+    return this.prisma.revocationRequest.findMany({
+      where: { issuerId, status: 'PENDING' },
+      include: {
+        vc: { select: { type: true, payload: true, issuerDid: true, rawJwt: true } },
+        holder: {
+          include: { organizations: { select: { name: true, lei: true } } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async approveRevocationRequest(requestId: string, issuerId: string, pin?: string) {
+    const request = await this.prisma.revocationRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        vc: { include: { organization: true } },
+      },
+    });
+    if (!request) throw new NotFoundException('Request not found');
+    if (request.issuerId !== issuerId) throw new ForbiddenException('Not your request');
+
+    await this.revokeCredential(request.vcId, issuerId);
+
+    if (request.type === 'UPDATE' && request.newClaimData && pin) {
+      const vcTypeName = request.vc.type?.[1];
+      const schema = await this.prisma.verifiableCredentialSchema.findFirst({
+        where: {
+          issuerId,
+          ...(vcTypeName ? { name: vcTypeName } : {}),
+        },
+      });
+      if (!schema) throw new NotFoundException('Schema not found for this credential type');
+
+      const holderOrg = await this.prisma.organization.findFirst({
+        where: { userId: request.holderId },
+      });
+      if (!holderOrg) throw new BadRequestException('Holder organization not found');
+
+      await this.signAndSaveCredential({
+        issuerId,
+        holderId: request.holderId,
+        holderOrgId: holderOrg.id,
+        schemaName: schema.name,
+        claimData: request.newClaimData as Record<string, unknown>,
+        pin,
+      });
+    }
+
+    await this.prisma.revocationRequest.update({
+      where: { id: requestId },
+      data: { status: 'APPROVED' },
+    });
+
+    const docName = request.vc.type?.[1] ?? 'Document';
+    await this.notificationService.create({
+      userId: request.holderId,
+      title: request.type === 'UPDATE' ? 'Document update approved' : 'Revocation approved',
+      message:
+        request.type === 'UPDATE'
+          ? `Your "${docName}" has been revoked and a new version has been issued to your wallet.`
+          : `Your "${docName}" has been successfully revoked as requested.`,
+      type: request.type === 'UPDATE' ? NotificationType.ISSUANCE : NotificationType.SYSTEM,
+    });
+
+    return { message: 'Request approved' };
+  }
+
+  async rejectRevocationRequest(requestId: string, issuerId: string) {
+    const request = await this.prisma.revocationRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (!request) throw new NotFoundException('Request not found');
+    if (request.issuerId !== issuerId) throw new ForbiddenException('Not your request');
+
+    await this.prisma.revocationRequest.update({
+      where: { id: requestId },
+      data: { status: 'REJECTED' },
+    });
+
+    await this.notificationService.create({
+      userId: request.holderId,
+      title: request.type === 'UPDATE' ? 'Document update rejected' : 'Revocation rejected',
+      message: `Your ${request.type.toLowerCase()} request was rejected by the issuer.`,
+      type: NotificationType.WARNING,
+    });
+
+    return { message: 'Request rejected' };
   }
 }

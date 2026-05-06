@@ -21,6 +21,13 @@ export class IssuerController {
   constructor(private readonly issuerService: IssuerService) {}
 
   @Auth(Role.ISSUER)
+  @ApiOperation({ summary: 'Get all credentials issued by this issuer' })
+  @Get('credentials')
+  async getIssuedCredentials(@Req() req: any) {
+    return this.issuerService.getIssuedCredentials(req.user.id);
+  }
+
+  @Auth(Role.ISSUER)
   @ApiOperation({ summary: 'Get pending requests for the issuer' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
   @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
@@ -57,6 +64,28 @@ export class IssuerController {
   @Patch('vc/:id/revoke')
   async revokeCredential(@Param('id') vcId: string, @Req() req: any) {
     return this.issuerService.revokeCredential(vcId, req.user.id);
+  }
+
+  @Auth(Role.ISSUER)
+  @Get('revocation-requests')
+  async getRevocationRequests(@Req() req: any) {
+    return this.issuerService.getRevocationRequests(req.user.id);
+  }
+
+  @Auth(Role.ISSUER)
+  @Post('revocation-requests/:id/approve')
+  async approveRevocationRequest(
+    @Param('id') requestId: string,
+    @Body() dto: ApproveRequestDto,
+    @Req() req: any,
+  ) {
+    return this.issuerService.approveRevocationRequest(requestId, req.user.id, dto.pin);
+  }
+
+  @Auth(Role.ISSUER)
+  @Post('revocation-requests/:id/reject')
+  async rejectRevocationRequest(@Param('id') requestId: string, @Req() req: any) {
+    return this.issuerService.rejectRevocationRequest(requestId, req.user.id);
   }
 
   @Auth(Role.HOLDER)

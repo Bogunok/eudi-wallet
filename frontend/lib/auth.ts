@@ -7,6 +7,7 @@ export interface CurrentUser {
   id: string;
   email: string;
   role: Role;
+  hasPinSet: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,7 +37,6 @@ export async function logout(): Promise<void> {
 
 export async function resetAccount(email: string, password: string): Promise<void> {
   await api.post('/auth/reset-account', { email, password });
-
   lock();
   if (typeof window !== 'undefined') {
     localStorage.removeItem('savedEmail');

@@ -98,6 +98,21 @@ export class WalletController {
   }
 
   @Auth(Role.HOLDER)
+  @Post('request-revocation')
+  async requestRevocation(@Req() req: any, @Body() dto: { vcId: string }) {
+    return this.walletService.requestRevocation(req.user.id, dto.vcId);
+  }
+
+  @Auth(Role.HOLDER)
+  @Post('request-update')
+  async requestUpdate(
+    @Req() req: any,
+    @Body() dto: { vcId: string; newClaimData: Record<string, unknown> },
+  ) {
+    return this.walletService.requestUpdate(req.user.id, dto.vcId, dto.newClaimData);
+  }
+
+  @Auth(Role.HOLDER)
   @ApiOperation({ summary: 'Create a Qualified Electronic Seal for a document' })
   @ApiResponse({ status: 200, description: 'Document successfully signed.' })
   @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
