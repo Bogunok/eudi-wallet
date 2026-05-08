@@ -3,58 +3,76 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
 import { VerificationStatus } from '@prisma/client';
 import { WalletPresentationResponseDto } from './dto/wallet-presentation-response.dto';
-import { Prisma, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class VerifierService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createVerificationRequest(verifierId: string, requestedType: string) {
-    // Generate a secure random nonce
+  async createVerificationRequest(
+    verifierId: string,
+    requestedType: string,
+    requestedFields: string[],
+    purpose?: string,
+  ) {
     const nonce = crypto.randomBytes(32).toString('hex');
 
     const session = await this.prisma.verificationSession.create({
       data: {
         nonce,
         requestedType,
+        requestedFields,
+        purpose: purpose ?? null,
         verifierId,
         status: VerificationStatus.PENDING,
+        walletRequestUrl: '', // заповнимо після отримання id
       },
     });
 
-    // Construct the Presentation Definition (DIF Presentation Exchange standard)
-    // This tells the EUDI Wallet exactly what kind of credential we need.
+    const fieldConstraints = [
+      {
+        path: ['$.vct'],
+        filter: { type: 'string', pattern: requestedType },
+      },
+      ...requestedFields.map(field => ({
+        path: [`$.${field}`],
+        intent_to_retain: false,
+      })),
+    ];
+
     const presentationDefinition = {
       id: `pd_${session.id}`,
       input_descriptors: [
         {
           id: `${requestedType.toLowerCase()}_descriptor`,
           name: `Request for ${requestedType}`,
-          purpose: 'To verify the organizational status and LEI code.',
-          format: {
-            'vc+sd-jwt': {},
-          },
+          purpose: purpose ?? `Verification of ${requestedType}`,
+          format: { 'vc+sd-jwt': {} },
           constraints: {
-            fields: [
-              {
-                path: ['$.vct'],
-                filter: {
-                  type: 'string',
-                  pattern: requestedType,
-                },
-              },
-            ],
+            limit_disclosure: 'required',
+            fields: fieldConstraints,
           },
         },
       ],
     };
 
-    // Construct the OID4VP Authorization Request URL (Same-Device Flow)
     const clientId = 'VerifierWebApp';
-    const responseUri = `http://localhost:3000/api/verifier/response/${session.id}`;
+    const apiBase = process.env.API_URL ?? 'http://localhost:3000';
+    const responseUri = `${apiBase}/api/verifier/response/${session.id}`;
 
-    // For a PoC, passing the presentation_definition by value in the URL is acceptable.
-    const walletRequestUrl = `openid4vp://?client_id=${clientId}&response_type=vp_token&nonce=${nonce}&presentation_definition=${encodeURIComponent(JSON.stringify(presentationDefinition))}&response_uri=${encodeURIComponent(responseUri)}`;
+    const walletRequestUrl =
+      `openid4vp://?` +
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&response_type=vp_token` +
+      `&nonce=${nonce}` +
+      `&presentation_definition=${encodeURIComponent(JSON.stringify(presentationDefinition))}` +
+      `&response_uri=${encodeURIComponent(responseUri)}`;
+
+    // Зберігаємо URL в БД — щоб верифікатор міг повторно скопіювати його зі сторінки сесії
+    await this.prisma.verificationSession.update({
+      where: { id: session.id },
+      data: { walletRequestUrl },
+    });
 
     return {
       sessionId: session.id,
@@ -64,17 +82,44 @@ export class VerifierService {
     };
   }
 
-  async getSessionById(sessionId: string, verifierId: string) {
-    const session = await this.prisma.verificationSession.findFirst({
-      where: {
-        id: sessionId,
-        verifierId,
+  async getSessionPublic(sessionId: string) {
+    const session = await this.prisma.verificationSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        verifier: {
+          select: {
+            email: true,
+            organizations: { select: { name: true, lei: true } },
+          },
+        },
       },
     });
 
-    if (!session) {
-      throw new NotFoundException('Verification session not found');
+    if (!session) throw new NotFoundException('Verification session not found');
+
+    if (session.status !== VerificationStatus.PENDING) {
+      throw new BadRequestException('This verification session is no longer active');
     }
+
+    return {
+      sessionId: session.id,
+      requestedType: session.requestedType,
+      requestedFields: session.requestedFields,
+      purpose: session.purpose,
+      verifier: {
+        name: session.verifier.organizations[0]?.name ?? session.verifier.email,
+        lei: session.verifier.organizations[0]?.lei ?? null,
+      },
+      createdAt: session.createdAt,
+    };
+  }
+
+  async getSessionById(sessionId: string, verifierId: string) {
+    const session = await this.prisma.verificationSession.findFirst({
+      where: { id: sessionId, verifierId },
+    });
+
+    if (!session) throw new NotFoundException('Verification session not found');
 
     return session;
   }
@@ -98,8 +143,8 @@ export class VerifierService {
 
     return verifiers.map(verifier => ({
       id: verifier.id,
-      name: verifier.organizations[0]?.name || verifier.email,
-      lei: verifier.organizations[0]?.lei || 'N/A',
+      name: verifier.organizations[0]?.name ?? verifier.email,
+      lei: verifier.organizations[0]?.lei ?? 'N/A',
     }));
   }
 
@@ -113,22 +158,28 @@ export class VerifierService {
     }
 
     try {
-      //Verify and decode the SD-JWT
       const verifiedData = await this.verifySdJwt(dto.vp_token);
 
-      // Validate the Verifiable Credential Type (vct)
       if (verifiedData.vct !== session.requestedType) {
         throw new BadRequestException(
           `Expected credential type ${session.requestedType}, but received ${verifiedData.vct}`,
         );
       }
 
-      // Save the successfully verified data
+      const missingFields = session.requestedFields.filter(
+        field => !(field in verifiedData.disclosedData),
+      );
+      if (missingFields.length > 0) {
+        throw new BadRequestException(
+          `Missing required fields in presentation: ${missingFields.join(', ')}`,
+        );
+      }
+
       await this.prisma.verificationSession.update({
         where: { id: sessionId },
         data: {
           status: VerificationStatus.VERIFIED,
-          presentedData: verifiedData.disclosedData, // Contains only the fields the user allowed to share
+          presentedData: verifiedData.disclosedData,
           holderDid: verifiedData.subjectDid,
         },
       });
@@ -138,7 +189,6 @@ export class VerifierService {
         message: 'SD-JWT signature is valid. Selective disclosures verified successfully.',
       };
     } catch (error) {
-      // If any cryptographic check fails, reject the session
       await this.prisma.verificationSession.update({
         where: { id: sessionId },
         data: { status: VerificationStatus.REJECTED },
@@ -147,37 +197,29 @@ export class VerifierService {
     }
   }
 
-  //Helper method to parse and verify the SD-JWT format
   private async verifySdJwt(sdJwtToken: string) {
-    //Split the token by tilde '~'
     const parts = sdJwtToken.split('~');
-
-    // The first part is always the JWT signed by the Issuer
     const jwtPart = parts[0];
     const disclosures = parts.slice(1).filter(part => part.length > 0);
     const verifiedPayload = await this.verifyIssuerSignature(jwtPart);
     const sdHashesInPayload: string[] = verifiedPayload._sd || [];
     const disclosedData: Record<string, any> = {};
 
-    // Verify each disclosure
     for (const disclosureB64url of disclosures) {
       const hash = crypto.createHash('sha256').update(disclosureB64url, 'ascii').digest();
       const hashB64url = hash.toString('base64url').replace(/=/g, '');
 
       if (!sdHashesInPayload.includes(hashB64url)) {
-        console.log('Computed:', hashB64url);
-        console.log('Allowed:', sdHashesInPayload);
         throw new BadRequestException(
           'Cryptographic mismatch: Disclosure hash not found in the signed SD-JWT payload',
         );
       }
 
-      // Decode the disclosure to get the actual data
       const disclosureString = Buffer.from(disclosureB64url, 'base64url').toString('utf-8');
       let salt, key, value;
       try {
         [salt, key, value] = JSON.parse(disclosureString);
-      } catch (e) {
+      } catch {
         throw new BadRequestException('Invalid disclosure format');
       }
 
@@ -192,12 +234,9 @@ export class VerifierService {
     };
   }
 
-  //Cryptographic verification of the Issuer's signature
   private async verifyIssuerSignature(rawJwt: string): Promise<any> {
     const parts = rawJwt.split('.');
-    if (parts.length !== 3) {
-      throw new BadRequestException('Invalid JWT format');
-    }
+    if (parts.length !== 3) throw new BadRequestException('Invalid JWT format');
 
     const [headerB64, payloadB64, signatureB64] = parts;
     const unsignedToken = `${headerB64}.${payloadB64}`;
@@ -205,28 +244,23 @@ export class VerifierService {
 
     const payloadStr = Buffer.from(payloadB64, 'base64url').toString('utf-8');
     const payload = JSON.parse(payloadStr);
-    const issuerDid = payload.iss;
 
-    // Find the Issuer's public key in the database
     const issuerDidDoc = await this.prisma.didDocument.findFirst({
-      where: { did: issuerDid },
+      where: { did: payload.iss },
     });
 
     if (!issuerDidDoc) {
-      throw new NotFoundException(`DID Document for issuer ${issuerDid} not found`);
+      throw new NotFoundException(`DID Document for issuer ${payload.iss} not found`);
     }
 
     let publicKeyObj: crypto.KeyObject;
-
     try {
       publicKeyObj = crypto.createPublicKey({
         key: issuerDidDoc.publicKey as any,
         format: 'jwk',
       });
-    } catch (error) {
-      throw new BadRequestException(
-        'Failed to parse Issuer public key from DID Document. Ensure it is a valid JWK.',
-      );
+    } catch {
+      throw new BadRequestException('Failed to parse Issuer public key from DID Document.');
     }
 
     const isValid = crypto.verify(null, Buffer.from(unsignedToken), publicKeyObj, signature);

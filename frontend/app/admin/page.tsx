@@ -49,20 +49,11 @@ export default function AdminPage() {
     setError('');
     setSuccess('');
     try {
-      if (type === 'issuer') {
-        await api.post('/auth/register-issuer', {
-          email,
-          password,
-          organizationName,
-          country,
-          lei,
-        });
-        setSuccess(`Issuer registered: ${email} (${organizationName})`);
-      } else {
-        // перевірити RegisterVerifierDto
-        await api.post('/auth/register-verifier', { email, password });
-        setSuccess(`Verifier registered: ${email}`);
-      }
+      const endpoint = type === 'issuer' ? '/auth/register-issuer' : '/auth/register-verifier';
+      await api.post(endpoint, { email, password, organizationName, country, lei });
+      setSuccess(
+        `${type === 'issuer' ? 'Issuer' : 'Verifier'} registered: ${email} (${organizationName})`,
+      );
       setEmail('');
       setPassword('');
       setOrganizationName('');
@@ -144,44 +135,43 @@ export default function AdminPage() {
               />
             </div>
 
-            {type === 'issuer' && (
-              <>
+            {/* Organization fields — required for both issuer and verifier */}
+            <>
+              <div className='space-y-2'>
+                <Label htmlFor='org-name'>Organization name</Label>
+                <Input
+                  id='org-name'
+                  value={organizationName}
+                  onChange={e => setOrganizationName(e.target.value)}
+                  placeholder='e.g. National University'
+                  required
+                />
+              </div>
+              <div className='grid gap-4 sm:grid-cols-2'>
                 <div className='space-y-2'>
-                  <Label htmlFor='org-name'>Organization name</Label>
+                  <Label htmlFor='org-country'>Country</Label>
                   <Input
-                    id='org-name'
-                    value={organizationName}
-                    onChange={e => setOrganizationName(e.target.value)}
-                    placeholder='e.g. National University'
+                    id='org-country'
+                    value={country}
+                    onChange={e => setCountry(e.target.value)}
+                    placeholder='e.g. UA'
                     required
                   />
                 </div>
-                <div className='grid gap-4 sm:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='org-country'>Country</Label>
-                    <Input
-                      id='org-country'
-                      value={country}
-                      onChange={e => setCountry(e.target.value)}
-                      placeholder='e.g. UA'
-                      required
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='org-lei'>LEI</Label>
-                    <Input
-                      id='org-lei'
-                      value={lei}
-                      onChange={e => setLei(e.target.value)}
-                      placeholder='20-character LEI'
-                      minLength={20}
-                      maxLength={20}
-                      required
-                    />
-                  </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='org-lei'>LEI</Label>
+                  <Input
+                    id='org-lei'
+                    value={lei}
+                    onChange={e => setLei(e.target.value)}
+                    placeholder='20-character LEI'
+                    minLength={20}
+                    maxLength={20}
+                    required
+                  />
                 </div>
-              </>
-            )}
+              </div>
+            </>
 
             {error && (
               <div className='rounded-md bg-destructive/10 p-3 text-sm text-destructive'>
@@ -197,10 +187,7 @@ export default function AdminPage() {
             <div className='flex justify-end'>
               <Button
                 type='submit'
-                disabled={
-                  submitting ||
-                  (type === 'issuer' && (!organizationName || !country || lei.length !== 20))
-                }
+                disabled={submitting || !organizationName || !country || lei.length !== 20}
               >
                 {submitting ? 'Registering...' : `Register ${type}`}
               </Button>

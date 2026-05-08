@@ -8,6 +8,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiNotFoundResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { VerifierService } from './verifier.service';
 import { VerificationRequestDto } from './dto/verification-request.dto';
@@ -22,7 +23,12 @@ export class VerifierController {
   constructor(private readonly verifierService: VerifierService) {}
 
   @Auth(Role.VERIFIER)
-  @ApiOperation({ summary: 'Create a new verification request (e.g., ask for LEI Credential)' })
+  @ApiOperation({
+    summary: 'Create a new verification request',
+    description:
+      'Generates an OID4VP session with a Presentation Definition that specifies ' +
+      'exactly which credential type and which fields (selective disclosure) are required.',
+  })
   @ApiResponse({
     description: 'Returns a session ID and the OID4VP redirect URL for the wallet.',
     status: HttpStatus.CREATED,
@@ -32,7 +38,12 @@ export class VerifierController {
   @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
   @Post('requests')
   async createVerificationRequest(@Body() dto: VerificationRequestDto, @Req() req: any) {
-    return this.verifierService.createVerificationRequest(req.user.id, dto.requestedType);
+    return this.verifierService.createVerificationRequest(
+      req.user.id,
+      dto.requestedType,
+      dto.requestedFields,
+      dto.purpose,
+    );
   }
 
   @Auth(Role.VERIFIER)
@@ -60,6 +71,22 @@ export class VerifierController {
   @Get('sessions')
   async getAllSessions(@Req() req: any) {
     return this.verifierService.getSessionsByVerifierId(req.user.id);
+  }
+
+  @Public()
+  @ApiOperation({
+    summary: 'Get public details of a pending verification session (for wallet consent screen)',
+    description:
+      'Returns requestedType, requestedFields, purpose and verifier identity. ' +
+      'No auth required — the holder uses this before deciding to consent.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'ID of the Verification Session' })
+  @ApiResponse({ description: 'Public session details.', status: HttpStatus.OK })
+  @ApiNotFoundResponse({ description: 'Session not found.' })
+  @ApiBadRequestResponse({ description: 'Session is no longer pending.' })
+  @Get('sessions/:sessionId/public')
+  async getSessionPublic(@Param('sessionId') sessionId: string) {
+    return this.verifierService.getSessionPublic(sessionId);
   }
 
   @Public()

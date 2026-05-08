@@ -54,19 +54,16 @@ enum NotificationType {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  password     String // Хеш пароля
-  pin          String // Хеш PIN-коду
-  pinAttempts  Int      @default(0) // Лічильник спроб
+  password     String 
+  pin          String 
+  pinAttempts  Int      @default(0) 
   role         Role     @default(HOLDER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  // оновлення токена доступу
   refreshToken String?
 
-  // Користувач може представляти одну або кілька організацій
   organizations Organization[]
 
-  // Зв'язки
   credentials  VerifiableCredential[]
   didDocuments DidDocument[]
 
@@ -106,10 +103,10 @@ model VerifiableCredential {
   status         VerifiableCredentialStatus @default(ACTIVE)
   issuedAt       DateTime
   expiresAt      DateTime?
-  //Зв'язок з власником гаманця (користувачем)
+ 
   userId         String
   user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  //Зв'язок з організацією (юридичною особою)
+  
   organizationId String?
   organization   Organization?              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime                   @default(now())
@@ -138,11 +135,9 @@ model RevocationRequest {
   vcId      String
   vc        VerifiableCredential @relation(fields: [vcId], references: [id], onDelete: Cascade)
 
-  // Хто просить
   holderId  String
   holder    User @relation("HolderRevocationRequests", fields: [holderId], references: [id], onDelete: Cascade)
 
-  // До кого звертається
   issuerId  String
   issuer    User @relation("IssuerRevocationRequests", fields: [issuerId], references: [id], onDelete: Cascade)
 
@@ -155,15 +150,13 @@ model RevocationRequest {
 
 model Organization {
   id      String @id @default(uuid())
-  lei     String @unique // LEI код організації
-  name    String // Офіційна назва
+  lei     String @unique
+  name    String 
   country String
 
-  // Зв'язок з представником
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Видані документи цій організації
   credentials VerifiableCredential[]
 
   createdAt DateTime @default(now())
@@ -186,13 +179,14 @@ model VerifiableCredentialSchema {
 // запис створюється при генерації посилання
 model VerificationSession {
   id     String             @id @default(uuid())
-  nonce  String             @unique // Унікальний рядок для захисту від повторів
+  nonce  String             @unique 
   status VerificationStatus @default(PENDING)
 
-  // Що ми запитували? (тип документа, дані)
   requestedType String
+  requestedFields String[]
+  purpose         String?  // Мета запиту — показується холдеру на екрані згоди
+  walletRequestUrl String?
 
-  // Результат перевірки (хто пред'явив, які дані)
   holderDid     String?
   presentedData Json? // Дані, які надіслав користувач, якщо перевірка успішна
 

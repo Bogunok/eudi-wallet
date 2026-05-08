@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, IsOptional, ArrayMinSize } from 'class-validator';
 
 export class VerificationRequestDto {
   @ApiProperty({
@@ -10,12 +10,24 @@ export class VerificationRequestDto {
   @IsNotEmpty()
   requestedType: string;
 
-  // За потреби додати інші параметри, наприклад purpose
-  // (мета запиту, щоб показати її користувачу в гаманці)
   @ApiProperty({
-    description: 'Purpose of the verification request (for display in the wallet)',
-    example: 'Verification of legal entity status for opening a corporate account',
+    description:
+      'Specific claim names to request via Selective Disclosure. ' +
+      'The wallet will present only these fields from the credential.',
+    example: ['lei', 'legalName', 'entityStatus'],
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  requestedFields: string[];
+
+  @ApiProperty({
+    description: 'Human-readable purpose shown to the holder in the wallet consent screen',
+    example: 'Verification of legal entity status for opening a corporate bank account',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   purpose?: string;
 }

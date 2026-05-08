@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Wallet, FileBadge, Building2, LayoutDashboard, Bell, Settings } from 'lucide-react';
+import {
+  Wallet,
+  FileBadge,
+  Building2,
+  LayoutDashboard,
+  Bell,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
@@ -10,6 +18,7 @@ import api from '@/lib/api';
 const NAV_ITEMS = [
   { href: '/wallet', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/wallet/credentials', label: 'Credentials', icon: FileBadge },
+  { href: '/wallet/verify', label: 'Verify Identity', icon: ShieldCheck },
   { href: '/wallet/organization', label: 'Organization', icon: Building2 },
   { href: '/wallet/notifications', label: 'Notifications', icon: Bell },
   { href: '/wallet/settings', label: 'Settings', icon: Settings },
@@ -24,7 +33,7 @@ export function Sidebar() {
       .get<{ unreadCount: number }>('/notifications/unread-count')
       .then(res => setUnreadCount(res.data.unreadCount))
       .catch(() => {});
-  }, [pathname]); // Оновлюємо лічильник при кожній навігації
+  }, [pathname]);
 
   return (
     <aside className='hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col'>
