@@ -15,9 +15,7 @@ export class VcService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  //Отримати список усіх активних документів для екрана гаманця
   async findAllCredentials(organizationId: string, userId: string) {
-    // Перевірка прав доступу перед поверненням списку
     const org = await this.prisma.organization.findFirst({
       where: { id: organizationId, userId },
     });
@@ -32,13 +30,21 @@ export class VcService {
     });
   }
 
-  //Детальний перегляд конкретного документа
+  // Отримати всі активні документи по userId — для випадку коли організації ще немає
+  // (наприклад LEI Credential виданий до створення організації)
+  async findAllCredentialsByUser(userId: string) {
+    return this.prisma.verifiableCredential.findMany({
+      where: {
+        userId,
+        status: VerifiableCredentialStatus.ACTIVE,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findCredentialById(id: string, userId: string) {
     const credential = await this.prisma.verifiableCredential.findFirst({
-      where: {
-        id: id,
-        userId: userId,
-      },
+      where: { id, userId },
     });
 
     if (!credential) {
@@ -59,7 +65,6 @@ export class VcService {
     });
   }
 
-  //Локальне видалення документа
   async deleteCredentialLocally(id: string, userId: string) {
     const credential = await this.findCredentialById(id, userId);
 
@@ -72,7 +77,7 @@ export class VcService {
       credential.type && credential.type.length > 1 ? credential.type[1] : 'Credential';
 
     await this.notificationService.create({
-      userId: userId,
+      userId,
       title: 'Document removed',
       message: `Document "${documentName}" has been successfully removed from your wallet.`,
       type: NotificationType.SYSTEM,

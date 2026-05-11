@@ -16,7 +16,7 @@ import { lastValueFrom } from 'rxjs';
 import { SignDocumentDto } from './dto/sign-document.dto';
 import * as crypto from 'crypto';
 import { NotificationService } from 'src/notification/notification.service';
-import { NotificationType, RequestStatus } from '@prisma/client';
+import { NotificationType, RequestStatus, VerifiableCredentialStatus } from '@prisma/client';
 import { RequestCredentialDto } from './dto/request-credential.dto';
 
 @Injectable()
@@ -142,17 +142,43 @@ export class WalletService {
     return updatedUser;
   }
 
-  //Створення заявки на документ
   async requestCredentialFromIssuer(dto: RequestCredentialDto, holderId: string) {
-    // Перевіряємо, чи існує така схема взагалі
     const schema = await this.prisma.verifiableCredentialSchema.findUnique({
       where: { id: dto.schemaId },
     });
     if (!schema) throw new NotFoundException('Verifiable credential schema not found');
 
+    // Перевірка на pending запит
+    const pendingRequest = await this.prisma.verifiableCredentialRequest.findFirst({
+      where: {
+        holderId,
+        schemaId: dto.schemaId,
+        status: RequestStatus.PENDING,
+      },
+    });
+    if (pendingRequest) {
+      throw new BadRequestException(
+        `You already have a pending request for "${schema.name}". Please wait for the issuer to respond.`,
+      );
+    }
+
+    // Перевірка на активний vc
+    const existing = await this.prisma.verifiableCredential.findFirst({
+      where: {
+        userId: holderId,
+        type: { has: schema.name },
+        status: VerifiableCredentialStatus.ACTIVE,
+      },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        `You already have an active "${schema.name}" credential. Use the Update request to change its data.`,
+      );
+    }
+
     const request = await this.prisma.verifiableCredentialRequest.create({
       data: {
-        holderId: holderId,
+        holderId,
         issuerId: dto.issuerId,
         schemaId: dto.schemaId,
         claimData: dto.claimData,

@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Building2, Save, Sparkles, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Save,
+  Sparkles,
+  ShieldCheck,
+  AlertCircle,
+  FileBadge,
+} from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,27 +28,32 @@ import {
 import api from '@/lib/api';
 import type { DidDocument, Organization } from '@/lib/vc-types';
 
+interface LeiCredential {
+  id: string;
+  type: string[];
+  payload: { lei?: string; legalName?: string; country?: string };
+  status: string;
+}
+
 export default function OrganizationPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [dids, setDids] = useState<DidDocument[]>([]);
+  const [leiCredential, setLeiCredential] = useState<LeiCredential | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
 
-  // Форма (працює і для create, і для update)
   const [lei, setLei] = useState('');
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
 
-  // DID setup
   const [didDialogOpen, setDidDialogOpen] = useState(false);
   const [didPin, setDidPin] = useState('');
   const [didDomain, setDidDomain] = useState('');
   const [didLoading, setDidLoading] = useState(false);
   const [didError, setDidError] = useState('');
 
-  // Завантаження поточної організації + DID
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -53,10 +66,27 @@ export default function OrganizationPage() {
         if (cancelled) return;
 
         if (orgRes.status === 'fulfilled') {
-          setOrg(orgRes.value.data);
-          setLei(orgRes.value.data.lei);
-          setName(orgRes.value.data.name);
-          setCountry(orgRes.value.data.country);
+          const o = orgRes.value.data;
+          setOrg(o);
+          setLei(o.lei);
+          setName(o.name);
+          setCountry(o.country);
+        } else {
+          // Організації немає — шукаємо LEI Credential щоб підставити дані
+          try {
+            const credRes = await api.get<LeiCredential[]>('/vc/my');
+            const leiCred = credRes.data.find(
+              c => c.status === 'ACTIVE' && c.type.some(t => t.toLowerCase().includes('lei')),
+            );
+            if (leiCred) {
+              setLeiCredential(leiCred);
+              setLei(leiCred.payload.lei ?? '');
+              setName(leiCred.payload.legalName ?? '');
+              setCountry(leiCred.payload.country ?? '');
+            }
+          } catch {
+            // немає організації і немає vc
+          }
         }
 
         if (didsRes.status === 'fulfilled') {
@@ -81,16 +111,11 @@ export default function OrganizationPage() {
 
     try {
       if (isExisting) {
-        // Бекенд забороняє змінювати LEI; шлемо тільки name + country.
         const res = await api.patch<Organization>('/organization/my', { name, country });
         setOrg(res.data);
         setSuccess('Organization updated.');
       } else {
-        const res = await api.post<Organization>('/organization/create', {
-          lei,
-          name,
-          country,
-        });
+        const res = await api.post<Organization>('/organization/create', { lei, name, country });
         setOrg(res.data);
         setSuccess('Organization created. You can now set up a DID.');
       }
@@ -126,6 +151,8 @@ export default function OrganizationPage() {
   if (loading) return <OrgSkeleton />;
 
   const activeDids = dids.filter(d => !d.deactivatedAt);
+  // Форма активна якщо: організація вже існує, АБО є LEI Credential
+  const formEnabled = isExisting || Boolean(leiCredential);
 
   return (
     <div className='space-y-6'>
@@ -150,6 +177,43 @@ export default function OrganizationPage() {
         </div>
       </div>
 
+      {/* Банер якщо немає ні організації ні LEI Credential */}
+      {!isExisting && !leiCredential && (
+        <Card className='flex items-start gap-4 border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/30'>
+          <AlertCircle className='mt-0.5 h-5 w-5 shrink-0 text-amber-600' />
+          <div className='space-y-2'>
+            <p className='font-medium text-amber-900 dark:text-amber-200'>
+              Please request a LEI Credential first
+            </p>
+            <p className='text-sm text-amber-800 dark:text-amber-300'>
+              To register your organization, you need a verified LEI Credential issued by a trusted
+              issuer. Once approved, your organization details will be filled in automatically.
+            </p>
+            <Button size='sm' asChild className='mt-1'>
+              <Link href='/wallet/credentials'>
+                <FileBadge className='h-4 w-4' />
+                Go to Credentials
+              </Link>
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Банер якщо є LEI Credential але організація ще не створена */}
+      {!isExisting && leiCredential && (
+        <Card className='flex items-start gap-4 border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-800 dark:bg-emerald-950/30'>
+          <ShieldCheck className='mt-0.5 h-5 w-5 shrink-0 text-emerald-600' />
+          <div>
+            <p className='font-medium text-emerald-900 dark:text-emerald-200'>
+              LEI Credential found
+            </p>
+            <p className='text-sm text-emerald-800 dark:text-emerald-300'>
+              Your details have been filled in from your verified credential. Review and confirm.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Profile form */}
       <Card className='p-6'>
         <h2 className='mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground'>
@@ -168,12 +232,16 @@ export default function OrganizationPage() {
               minLength={20}
               maxLength={20}
               required
-              disabled={isExisting}
+              disabled={isExisting || !formEnabled}
+              readOnly={Boolean(leiCredential)}
+              className={leiCredential ? 'bg-muted cursor-not-allowed' : ''}
             />
             <p className='text-xs text-muted-foreground'>
               {isExisting
                 ? 'LEI cannot be changed once set. Contact support if needed.'
-                : '20-character identifier issued under ISO 17442.'}
+                : leiCredential
+                  ? 'Filled automatically from your verified LEI Credential. Cannot be edited.'
+                  : 'Will be filled automatically from your LEI Credential.'}
             </p>
           </div>
 
@@ -185,9 +253,10 @@ export default function OrganizationPage() {
               <Input
                 id='name'
                 value={name}
-                onChange={e => setName(e.target.value)}
                 placeholder='Acme Holdings Ltd.'
                 required
+                disabled
+                className='bg-muted cursor-not-allowed'
               />
             </div>
 
@@ -198,9 +267,10 @@ export default function OrganizationPage() {
               <Input
                 id='country'
                 value={country}
-                onChange={e => setCountry(e.target.value)}
                 placeholder='Ukraine'
                 required
+                disabled
+                className='bg-muted cursor-not-allowed'
               />
             </div>
           </div>
@@ -215,10 +285,20 @@ export default function OrganizationPage() {
           )}
 
           <div className='flex justify-end'>
-            <Button type='submit' disabled={saving}>
-              <Save className='h-4 w-4' />
-              {saving ? 'Saving...' : isExisting ? 'Save changes' : 'Create organization'}
-            </Button>
+            {isExisting ? (
+              <p className='text-xs text-muted-foreground'>
+                To update organization details, visit{' '}
+                <a href='/wallet/credentials' className='underline text-accent'>
+                  Credentials
+                </a>{' '}
+                page to request updates of LEI.
+              </p>
+            ) : (
+              <Button type='submit' disabled={saving || !formEnabled}>
+                <Save className='h-4 w-4' />
+                {saving ? 'Saving...' : 'Create organization'}
+              </Button>
+            )}
           </div>
         </form>
       </Card>

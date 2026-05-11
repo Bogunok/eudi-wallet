@@ -1,6 +1,6 @@
 // issuer/dto/approve-request.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, Length, IsOptional } from 'class-validator';
 
 export class ApproveRequestDto {
   @ApiProperty({
@@ -10,4 +10,9 @@ export class ApproveRequestDto {
   @IsString()
   @IsNotEmpty()
   pin: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(20, 20)
+  assignedLei?: string;
 }

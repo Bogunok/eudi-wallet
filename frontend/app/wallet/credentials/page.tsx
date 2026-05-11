@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileBadge, Plus, Building2 } from 'lucide-react';
+import { FileBadge, Plus, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,12 +38,15 @@ export default function CredentialsListPage() {
   }, []);
 
   useEffect(() => {
-    if (!org) return;
+    if (orgLoading) return;
     let cancelled = false;
     setVcLoading(true);
     (async () => {
       try {
-        const res = await api.get<VerifiableCredential[]>(`/vc/org/${org.id}`);
+        // Якщо організація є — беремо по orgId
+        // Якщо немає — беремо по userId (для LEI Credential виданого до організації)
+        const url = org ? `/vc/org/${org.id}` : '/vc/my';
+        const res = await api.get<VerifiableCredential[]>(url);
         if (!cancelled) setCredentials(res.data);
       } catch {
       } finally {
@@ -53,23 +56,9 @@ export default function CredentialsListPage() {
     return () => {
       cancelled = true;
     };
-  }, [org]);
+  }, [org, orgLoading]);
 
   if (orgLoading) return <ListSkeleton />;
-
-  if (orgError === 'not-found') {
-    return (
-      <div className='space-y-6'>
-        <PageHeader />
-        <EmptyState
-          icon={<Building2 className='h-6 w-6' />}
-          title='Set up your organization first'
-          description='Credentials are issued to organizations. Create your legal entity profile before requesting documents.'
-          action={{ label: 'Create organization', href: '/wallet/organization' }}
-        />
-      </div>
-    );
-  }
 
   if (orgError === 'other') {
     return (
@@ -88,6 +77,22 @@ export default function CredentialsListPage() {
         <PageHeader />
       </div>
 
+      {orgError === 'not-found' && (
+        <Card className='flex items-start gap-4 border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/30'>
+          <AlertCircle className='mt-0.5 h-5 w-5 shrink-0 text-amber-600' />
+          <div className='space-y-1'>
+            <p className='font-medium text-amber-900 dark:text-amber-200'>
+              Organization not set up yet
+            </p>
+            <p className='text-sm text-amber-800 dark:text-amber-300'>
+              Most credentials require a registered organization. However, you can request a{' '}
+              <span className='font-medium'>LEI Credential</span> first — once approved, it will
+              allow you to register your organization automatically.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {vcLoading ? (
         <div className='grid gap-4 sm:grid-cols-2'>
           <Skeleton className='h-44' />
@@ -96,9 +101,16 @@ export default function CredentialsListPage() {
       ) : credentials.length === 0 ? (
         <EmptyState
           icon={<FileBadge className='h-6 w-6' />}
-          title='No credentials yet'
-          description='Request your first verifiable credential from a trusted issuer.'
-          action={{ label: 'Add document', href: '/wallet/credentials/request' }}
+          title={orgError === 'not-found' ? 'Request your LEI Credential' : 'No credentials yet'}
+          description={
+            orgError === 'not-found'
+              ? 'A LEI Credential is the first step. Request it from a trusted issuer to verify your legal entity identity.'
+              : 'Request your first verifiable credential from a trusted issuer.'
+          }
+          action={{
+            label: orgError === 'not-found' ? 'Request LEI Credential' : 'Add document',
+            href: '/wallet/credentials/request',
+          }}
         />
       ) : (
         <>

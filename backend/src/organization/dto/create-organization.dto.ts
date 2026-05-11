@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger/dist/decorators/api-property.decorator';
-import { IsString, IsNotEmpty, Length, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, Length } from 'class-validator';
 
 export class CreateOrganizationDto {
   @ApiProperty({
@@ -26,12 +26,4 @@ export class CreateOrganizationDto {
   @IsString()
   @IsNotEmpty()
   country: string;
-
-  @ApiProperty({
-    description: 'UUID of the user creating the organization',
-    example: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  userId: string;
 }

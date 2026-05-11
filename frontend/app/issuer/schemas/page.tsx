@@ -1,13 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import api from '@/lib/api';
 
 interface Schema {
@@ -22,16 +30,13 @@ export default function IssuerSchemasPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
-  // Form state
   const [name, setName] = useState('');
   const [schemaId, setSchemaId] = useState('');
   const [structureText, setStructureText] = useState(
     JSON.stringify(
       {
         type: 'object',
-        properties: {
-          fieldName: { type: 'string' },
-        },
+        properties: { fieldName: { type: 'string' } },
         required: ['fieldName'],
         additionalProperties: false,
       },
@@ -96,6 +101,10 @@ export default function IssuerSchemasPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDeleted = (id: string) => {
+    setSchemas(prev => prev.filter(s => s.id !== id));
   };
 
   if (loading) return <SchemasSkeleton />;
@@ -193,7 +202,7 @@ export default function IssuerSchemasPage() {
       ) : (
         <div className='space-y-3'>
           {schemas.map(schema => (
-            <SchemaCard key={schema.id} schema={schema} />
+            <SchemaCard key={schema.id} schema={schema} onDeleted={handleDeleted} />
           ))}
         </div>
       )}
@@ -201,49 +210,109 @@ export default function IssuerSchemasPage() {
   );
 }
 
-function SchemaCard({ schema }: { schema: Schema }) {
+function SchemaCard({ schema, onDeleted }: { schema: Schema; onDeleted: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const properties =
     (schema.structure as { properties?: Record<string, unknown> })?.properties ?? {};
   const fieldCount = Object.keys(properties).length;
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/schemas/${schema.id}`);
+      onDeleted(schema.id);
+    } catch (err: unknown) {
+      setDeleteError(extractErrorMessage(err, 'Failed to delete schema'));
+      setDeleting(false);
+    }
+  };
+
   return (
-    <Card className='overflow-hidden'>
-      <div
-        className='flex cursor-pointer items-start justify-between gap-4 p-5'
-        onClick={() => setExpanded(v => !v)}
-      >
-        <div className='flex items-start gap-3 min-w-0'>
-          <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent'>
-            <FileText className='h-5 w-5' />
-          </div>
-          <div className='min-w-0'>
-            <div className='font-semibold'>{schema.name}</div>
-            <div className='mt-0.5 font-mono text-xs text-muted-foreground'>{schema.schemaId}</div>
-            <div className='mt-1'>
-              <Badge variant='secondary'>
-                {fieldCount} field{fieldCount !== 1 ? 's' : ''}
-              </Badge>
+    <>
+      <Card className='overflow-hidden'>
+        <div className='flex items-start justify-between gap-4 p-5'>
+          <div
+            className='flex flex-1 cursor-pointer items-start gap-3 min-w-0'
+            onClick={() => setExpanded(v => !v)}
+          >
+            <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent'>
+              <FileText className='h-5 w-5' />
+            </div>
+            <div className='min-w-0'>
+              <div className='font-semibold'>{schema.name}</div>
+              <div className='mt-0.5 font-mono text-xs text-muted-foreground'>
+                {schema.schemaId}
+              </div>
+              <div className='mt-1'>
+                <Badge variant='secondary'>
+                  {fieldCount} field{fieldCount !== 1 ? 's' : ''}
+                </Badge>
+              </div>
             </div>
           </div>
-        </div>
-        <span className='shrink-0 text-muted-foreground'>
-          {expanded ? <ChevronUp className='h-5 w-5' /> : <ChevronDown className='h-5 w-5' />}
-        </span>
-      </div>
 
-      {expanded && (
-        <div className='border-t border-border px-5 pb-5 pt-4'>
-          <h3 className='mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
-            JSON Schema structure
-          </h3>
-          <pre className='overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed'>
-            {JSON.stringify(schema.structure, null, 2)}
-          </pre>
+          <div className='flex shrink-0 items-center gap-1'>
+            <Button
+              variant='ghost'
+              size='icon'
+              onClick={() => setConfirmOpen(true)}
+              className='text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+              title='Delete schema'
+            >
+              <Trash2 className='h-4 w-4' />
+            </Button>
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className='p-2 text-muted-foreground hover:text-foreground transition-colors'
+            >
+              {expanded ? <ChevronUp className='h-5 w-5' /> : <ChevronDown className='h-5 w-5' />}
+            </button>
+          </div>
         </div>
-      )}
-    </Card>
+
+        {expanded && (
+          <div className='border-t border-border px-5 pb-5 pt-4'>
+            <h3 className='mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+              JSON Schema structure
+            </h3>
+            <pre className='overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed'>
+              {JSON.stringify(schema.structure, null, 2)}
+            </pre>
+          </div>
+        )}
+      </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete schema?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className='font-semibold'>{schema.name}</span>?
+              This cannot be undone. Schemas with existing credential requests cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <div className='rounded-md bg-destructive/10 p-3 text-sm text-destructive'>
+              {deleteError}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setConfirmOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant='destructive' onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

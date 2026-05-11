@@ -405,7 +405,7 @@ function ConsentStep({
       {/* Credential selector */}
       <Card className='p-5 space-y-3'>
         <h2 className='font-semibold text-sm uppercase tracking-wide text-muted-foreground'>
-          Choose a credential to present
+          A credential to present
         </h2>
 
         {credentials.length === 0 ? (
@@ -516,7 +516,7 @@ function SuccessScreen({ onDone }: { onDone: () => void }) {
       <div>
         <h2 className='text-xl font-semibold'>Verification successful</h2>
         <p className='mt-2 text-sm text-muted-foreground'>
-          Your credential was shared and verified. The verifier has confirmed your identity.
+          Your credential was shared. The verifier will confirm your identity.
         </p>
       </div>
       <Button onClick={onDone} variant='outline'>

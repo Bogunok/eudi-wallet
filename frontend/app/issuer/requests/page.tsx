@@ -98,25 +98,37 @@ function RequestCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [pin, setPin] = useState('');
+  const [assignedLei, setAssignedLei] = useState('');
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState('');
-  const pinRef = useRef<HTMLInputElement>(null);
+  const pinRef = useRef<HTMLInputElement | null>(null);
 
   const holderOrg = request.holder.organizations[0];
   const holderDid = request.holder.didDocuments?.[0]?.did ?? null;
   const hasDid = Boolean(holderDid);
+  const isLeiSchema = request.schema.name === 'LEI';
+
+  const canApprove =
+    pin.length === 4 && (hasDid || isLeiSchema) && (!isLeiSchema || assignedLei.length === 20);
 
   const handleApprove = async () => {
-    if (pin.length !== 4) {
-      setError('Enter your 4-digit PIN to sign the credential');
-      pinRef.current?.focus();
+    if (!canApprove) {
+      if (pin.length !== 4) {
+        setError('Enter your 4-digit PIN to sign the credential');
+        pinRef.current?.focus();
+      } else if (isLeiSchema && assignedLei.length !== 20) {
+        setError('Enter a valid 20-character LEI code to assign');
+      }
       return;
     }
     setApproving(true);
     setError('');
     try {
-      await api.post(`/issuer/requests/${request.id}/approve`, { pin });
+      await api.post(`/issuer/requests/${request.id}/approve`, {
+        pin,
+        ...(isLeiSchema ? { assignedLei } : {}),
+      });
       onApproved(request.id);
     } catch (err: unknown) {
       setError(extractErrorMessage(err, 'Failed to approve. Check your PIN.'));
@@ -184,8 +196,16 @@ function RequestCard({
                 <dt className='text-muted-foreground'>DID</dt>
                 <dd className='font-mono break-all'>
                   {holderDid ?? (
-                    <span className='text-destructive font-sans'>
-                      No DID — credential cannot be issued
+                    <span
+                      className={
+                        isLeiSchema
+                          ? 'text-muted-foreground font-sans'
+                          : 'text-destructive font-sans'
+                      }
+                    >
+                      {isLeiSchema
+                        ? 'No DID yet (acceptable for LEI)'
+                        : 'No DID — credential cannot be issued'}
                     </span>
                   )}
                 </dd>
@@ -193,11 +213,17 @@ function RequestCard({
             </div>
           </div>
 
-          {/* Warning if there is no active DID */}
-          {!hasDid && (
+          {!hasDid && !isLeiSchema && (
             <div className='rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800'>
               This holder has not set up a DID yet. Ask them to go to Organization → Create DID
               before you can issue a credential.
+            </div>
+          )}
+          {!hasDid && isLeiSchema && (
+            <div className='rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800'>
+              This holder has no DID yet — that's expected for a first LEI Credential request. The
+              credential will be issued using their email as a temporary identifier. They can create
+              a DID after registering their organization.
             </div>
           )}
 
@@ -210,6 +236,45 @@ function RequestCard({
               {JSON.stringify(request.claimData, null, 2)}
             </pre>
           </div>
+
+          {/* LEI assignment — тільки для LEI схеми */}
+          {isLeiSchema && (
+            <div className='rounded-lg border border-accent/20 bg-accent/5 p-4 space-y-3'>
+              <div>
+                <h3 className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+                  Assign LEI Code
+                </h3>
+                <p className='mt-1 text-xs text-muted-foreground'>
+                  As the issuing authority, you assign the LEI code to this organization. The holder
+                  did not provide it — you generate or look it up and enter it here.
+                </p>
+              </div>
+              <div className='max-w-xs space-y-2'>
+                <Label htmlFor={`lei-${request.id}`}>LEI Code</Label>
+                <Input
+                  id={`lei-${request.id}`}
+                  value={assignedLei}
+                  onChange={e =>
+                    setAssignedLei(
+                      e.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, '')
+                        .slice(0, 20),
+                    )
+                  }
+                  placeholder='20-character LEI code'
+                  maxLength={20}
+                  className='font-mono tracking-wider'
+                />
+                <p className='text-xs text-muted-foreground'>
+                  {assignedLei.length}/20 characters
+                  {assignedLei.length === 20 && (
+                    <span className='ml-2 text-emerald-600 font-medium'>✓ Valid length</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* PIN + actions */}
           <div className='space-y-3'>
@@ -238,9 +303,15 @@ function RequestCard({
             <div className='flex gap-3'>
               <Button
                 onClick={handleApprove}
-                disabled={approving || rejecting || pin.length !== 4 || !hasDid}
+                disabled={approving || rejecting || !canApprove}
                 className='bg-emerald-600 text-white hover:bg-emerald-700'
-                title={!hasDid ? 'Cannot approve: holder has no DID' : undefined}
+                title={
+                  !hasDid
+                    ? 'Cannot approve: holder has no DID'
+                    : isLeiSchema && assignedLei.length !== 20
+                      ? 'Enter a 20-character LEI code'
+                      : undefined
+                }
               >
                 <Check className='h-4 w-4' />
                 {approving ? 'Issuing...' : 'Approve & Issue'}

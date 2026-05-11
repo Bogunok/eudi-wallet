@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
 import Ajv from 'ajv';
@@ -38,6 +43,34 @@ export class SchemaService {
       message: 'Schema successfully created',
       schema: newSchema,
     };
+  }
+
+  async deleteSchema(id: string, issuerId: string) {
+    const schema = await this.prisma.verifiableCredentialSchema.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { verifiableCredentialRequests: true } },
+      },
+    });
+
+    if (!schema) {
+      throw new NotFoundException(`Schema not found`);
+    }
+
+    if (schema.issuerId !== issuerId) {
+      throw new ForbiddenException('You can only delete your own schemas');
+    }
+
+    // Не дозволяємо видаляти схему якщо є pending запити
+    if (schema._count.verifiableCredentialRequests > 0) {
+      throw new BadRequestException(
+        'Cannot delete schema: there are existing credential requests linked to it.',
+      );
+    }
+
+    await this.prisma.verifiableCredentialSchema.delete({ where: { id } });
+
+    return { message: 'Schema deleted successfully' };
   }
 
   async findAllSchemasByIssuer(issuerId: string) {

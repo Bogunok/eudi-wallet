@@ -16,30 +16,24 @@ interface VerificationSession {
   presentationDefinition: unknown;
 }
 
-// Відомі типи кредентіалів з типовими полями для швидкого вибору
+// Відомі типи vc з типовими полями для швидкого вибору
 const CREDENTIAL_PRESETS: Record<string, { fields: string[]; label: string }> = {
-  LEICredential: {
+  LEI: {
     label: 'LEI Credential',
-    fields: ['lei', 'legalName', 'entityStatus', 'leiStatus'],
+    fields: ['lei', 'legalName', 'country'],
   },
-  BusinessRegistrationCredential: {
-    label: 'Business Registration',
-    fields: ['registrationNumber', 'legalName', 'country', 'registrationDate'],
-  },
-  TaxCredential: {
-    label: 'Tax Credential',
-    fields: ['taxId', 'legalName', 'taxStatus'],
+  'Business License': {
+    label: 'Business License',
+    fields: ['businessName', 'licenseNumber', 'licenseType', 'country'],
   },
 };
 
 const ALL_CREDENTIAL_TYPES = Object.keys(CREDENTIAL_PRESETS);
 
 export default function VerifierDashboardPage() {
-  const [requestedType, setRequestedType] = useState('LEICredential');
+  const [requestedType, setRequestedType] = useState('LEI');
   const [customType, setCustomType] = useState('');
-  const [selectedFields, setSelectedFields] = useState<string[]>(
-    CREDENTIAL_PRESETS['LEICredential'].fields,
-  );
+  const [selectedFields, setSelectedFields] = useState<string[]>(CREDENTIAL_PRESETS['LEI'].fields);
   const [customField, setCustomField] = useState('');
   const [purpose, setPurpose] = useState('');
 

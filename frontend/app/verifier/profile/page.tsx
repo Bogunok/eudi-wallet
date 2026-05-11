@@ -78,46 +78,6 @@ export default function VerifierProfilePage() {
           </div>
         )}
       </Card>
-
-      {/* DID */}
-      <Card className='p-6 space-y-4'>
-        <div className='flex items-center gap-3'>
-          <div className='flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 text-accent'>
-            <Key className='h-4 w-4' />
-          </div>
-          <h2 className='font-semibold'>Decentralized Identifier (DID)</h2>
-        </div>
-
-        {didLoading ? (
-          <div className='space-y-2'>
-            <Skeleton className='h-4 w-full' />
-            <Skeleton className='h-4 w-32' />
-          </div>
-        ) : did ? (
-          <dl className='grid gap-3'>
-            <Row
-              label='DID'
-              value={<span className='font-mono text-xs break-all'>{did.did}</span>}
-            />
-            <Row label='Method' value={did.method} />
-            <Row label='Key ID' value={<span className='font-mono text-xs'>{did.keyId}</span>} />
-            <Row
-              label='Status'
-              value={
-                <div className='flex items-center gap-1.5 text-emerald-600'>
-                  <ShieldCheck className='h-3.5 w-3.5' />
-                  <span className='text-sm font-medium'>Active</span>
-                </div>
-              }
-            />
-          </dl>
-        ) : (
-          <div className='flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800'>
-            <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
-            No DID document found. A DID is required to be recognized as a trusted verifier.
-          </div>
-        )}
-      </Card>
     </div>
   );
 }

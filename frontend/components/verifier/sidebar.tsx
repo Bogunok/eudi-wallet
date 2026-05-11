@@ -6,9 +6,9 @@ import { Wallet, ShieldCheck, ClipboardList, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/verifier', label: 'Dashboard', icon: ShieldCheck, exact: true },
+  { href: '/verifier', label: 'Create request', icon: ShieldCheck, exact: true },
   { href: '/verifier/sessions', label: 'Sessions', icon: ClipboardList },
-  { href: '/verifier/profile', label: 'Profile & DID', icon: Building2 },
+  { href: '/verifier/profile', label: 'Profile', icon: Building2 },
 ];
 
 export function VerifierSidebar() {

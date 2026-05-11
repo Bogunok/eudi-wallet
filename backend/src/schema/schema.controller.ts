@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Req } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Req, Delete } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -8,6 +8,7 @@ import {
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { SchemaService } from './schema.service';
 import { CreateSchemaDto } from './dto/create-schema.dto';
@@ -42,6 +43,20 @@ export class SchemaController {
   async findAll(@Req() req: any) {
     const issuerId = req.user.id;
     return this.schemaService.findAllSchemasByIssuer(issuerId);
+  }
+
+  @Auth(Role.ISSUER)
+  @ApiOperation({ summary: 'Delete a schema by ID (Only for Issuers)' })
+  @ApiParam({ name: 'id', description: 'ID of the schema to delete' })
+  @ApiResponse({ status: 200, description: 'Schema deleted successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'You can only delete your own schemas.' })
+  @ApiNotFoundResponse({ description: 'Schema not found.' })
+  @ApiBadRequestResponse({ description: 'Cannot delete schema with existing requests.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Req() req: any) {
+    return this.schemaService.deleteSchema(id, req.user.id);
   }
 
   @Auth(Role.HOLDER)

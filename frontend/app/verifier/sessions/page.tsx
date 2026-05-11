@@ -54,7 +54,7 @@ export default function VerifierSessionsPage() {
           </p>
         </div>
       ) : (
-        <div className='space-y-3'>
+        <div className='flex flex-col gap-4 max-w-3xl'>
           {sessions.map(session => (
             <SessionRow key={session.id} session={session} />
           ))}
@@ -87,38 +87,40 @@ function SessionRow({ session }: { session: VerificationSession }) {
 
   return (
     <Link href={`/verifier/sessions/${session.id}`}>
-      <Card className='flex items-center justify-between gap-4 p-4 hover:border-accent/40 transition-colors cursor-pointer'>
-        <div className='flex items-center gap-3 min-w-0'>
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-              session.status === 'VERIFIED'
-                ? 'bg-emerald-100 text-emerald-600'
-                : session.status === 'REJECTED'
-                  ? 'bg-destructive/10 text-destructive'
-                  : 'bg-amber-100 text-amber-600'
-            }`}
-          >
-            <StatusIcon className='h-4 w-4' />
-          </div>
-          <div className='min-w-0'>
-            <div className='font-medium text-sm truncate'>{session.requestedType}</div>
-            <div className='text-xs text-muted-foreground mt-0.5'>
-              {session.holderDid ? (
-                <span className='font-mono truncate block'>{session.holderDid}</span>
-              ) : (
-                <span>No holder yet</span>
-              )}
+      <Card className='px-5 py-4 hover:border-accent/40 hover:shadow-md transition-all cursor-pointer'>
+        <div className='flex items-center justify-between gap-4'>
+          <div className='flex items-center gap-4 min-w-0'>
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                session.status === 'VERIFIED'
+                  ? 'bg-emerald-100 text-emerald-600'
+                  : session.status === 'REJECTED'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-amber-100 text-amber-600'
+              }`}
+            >
+              <StatusIcon className='h-5 w-5' />
+            </div>
+            <div className='min-w-0'>
+              <div className='font-semibold text-base'>{session.requestedType}</div>
+              <div className='text-sm text-muted-foreground mt-0.5'>
+                {session.holderDid ? (
+                  <span className='font-mono text-xs'>{session.holderDid}</span>
+                ) : (
+                  <span>No holder yet</span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        <div className='flex items-center gap-3 shrink-0'>
-          <div className='text-right hidden sm:block'>
-            <Badge className={statusConfig.badge}>{statusConfig.label}</Badge>
-            <div className='text-xs text-muted-foreground mt-1'>
-              {formatDate(session.createdAt)}
+          <div className='flex items-center gap-4 shrink-0'>
+            <div className='text-right'>
+              <Badge className={statusConfig.badge}>{statusConfig.label}</Badge>
+              <div className='text-xs text-muted-foreground mt-1.5'>
+                {formatDate(session.createdAt)}
+              </div>
             </div>
+            <ChevronRight className='h-5 w-5 text-muted-foreground' />
           </div>
-          <ChevronRight className='h-4 w-4 text-muted-foreground' />
         </div>
       </Card>
     </Link>
@@ -132,9 +134,9 @@ function SessionsSkeleton() {
         <Skeleton className='h-7 w-52' />
         <Skeleton className='mt-2 h-4 w-80' />
       </div>
-      <div className='space-y-3'>
+      <div className='flex flex-col gap-4 max-w-3xl'>
         {[1, 2, 3].map(i => (
-          <Skeleton key={i} className='h-16' />
+          <Skeleton key={i} className='h-20' />
         ))}
       </div>
     </div>

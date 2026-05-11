@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Delete, Param, Req } from '@nestjs/common';
 import { VcService } from './vc.service';
 import {
   ApiTags,
@@ -10,7 +10,6 @@ import {
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
-import { RequestCredentialDto } from '../wallet/dto/request-credential.dto';
 import { Role } from '@prisma/client';
 import { Auth } from '../auth/decorators/auth.decorator';
 
@@ -18,6 +17,17 @@ import { Auth } from '../auth/decorators/auth.decorator';
 @Controller('vc')
 export class VcController {
   constructor(private readonly vcService: VcService) {}
+
+  @Auth(Role.HOLDER)
+  @ApiOperation({ summary: 'Get all active Verifiable Credentials for the current user' })
+  @ApiResponse({ description: 'List of active Verifiable Credentials retrieved successfully.' })
+  @ApiUnauthorizedResponse({ description: 'The user is unauthorized.' })
+  @ApiForbiddenResponse({ description: 'The user is forbidden to perform this action.' })
+  @ApiInternalServerErrorResponse({ description: 'Internal server error has occured.' })
+  @Get('my')
+  async getMyCredentials(@Req() req: any) {
+    return this.vcService.findAllCredentialsByUser(req.user.id);
+  }
 
   //Список усіх документів організації
   @Auth(Role.HOLDER)

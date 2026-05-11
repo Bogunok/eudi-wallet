@@ -28,6 +28,16 @@ export class OrganizationService {
       },
     });
 
+    await this.prisma.verifiableCredential.updateMany({
+      where: {
+        userId: userId,
+        organizationId: null,
+      },
+      data: {
+        organizationId: newOrganization.id,
+      },
+    });
+
     await this.notificationService.create({
       userId: userId,
       title: 'Organization registered',

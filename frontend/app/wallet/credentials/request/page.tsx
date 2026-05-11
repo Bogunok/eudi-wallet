@@ -30,6 +30,7 @@ export default function RequestCredentialPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [hasOrg, setHasOrg] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,9 +49,24 @@ export default function RequestCredentialPage() {
     };
   }, []);
 
+  useEffect(() => {
+    api
+      .get('/organization/my')
+      .then(() => setHasOrg(true))
+      .catch(() => setHasOrg(false));
+  }, []);
+
+  const filteredSchemas = useMemo(() => {
+    if (hasOrg === false) {
+      return schemas.filter(s => s.name.toUpperCase().includes('LEI'));
+    }
+    return schemas;
+  }, [schemas, hasOrg]);
+
   const issuers = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; lei: string | null }>();
-    for (const schema of schemas) {
+    for (const schema of filteredSchemas) {
+      // ← filteredSchemas замість schemas
       if (!seen.has(schema.issuerId)) {
         seen.set(schema.issuerId, {
           id: schema.issuerId,
@@ -60,12 +76,12 @@ export default function RequestCredentialPage() {
       }
     }
     return Array.from(seen.values());
-  }, [schemas]);
+  }, [filteredSchemas]);
 
   const issuerSchemas = useMemo(() => {
     if (!issuerId) return [];
-    return schemas.filter(s => s.issuerId === issuerId);
-  }, [issuerId, schemas]);
+    return filteredSchemas.filter(s => s.issuerId === issuerId); // ← filteredSchemas
+  }, [issuerId, filteredSchemas]);
 
   const selectedSchema = useMemo(() => {
     return schemas.find(s => s.id === schemaId) ?? null;
@@ -153,7 +169,16 @@ export default function RequestCredentialPage() {
   return (
     <div className='space-y-6'>
       <BackLink />
-
+      {hasOrg === false && (
+        <Card className='flex items-start gap-4 border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30'>
+          <AlertCircle className='mt-0.5 h-5 w-5 shrink-0 text-amber-600' />
+          <p className='text-sm text-amber-800 dark:text-amber-300'>
+            You don't have an organization yet. Only{' '}
+            <span className='font-medium'>LEI Credentials</span> are available. Once your LEI
+            Credential is approved, you can register your organization and request other documents.
+          </p>
+        </Card>
+      )}
       <div className='flex items-start gap-3'>
         <div className='flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent'>
           <FilePlus2 className='h-6 w-6' />
@@ -233,7 +258,7 @@ export default function RequestCredentialPage() {
           </Card>
         )}
 
-        {/* Step 3 — Fields (динамічно з JSON Schema) */}
+        {/* Step 3 — Fields */}
         {selectedSchema && (
           <Card className='p-6'>
             <StepHeader number={3} title='Fill in the details' active={currentStep >= 3} />

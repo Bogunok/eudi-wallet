@@ -104,48 +104,47 @@ export default function IssuerCredentialsPage() {
             const holderName = vc.organization?.name ?? vc.user.email;
 
             return (
-              <Card
-                key={vc.id}
-                className='flex items-center justify-between gap-4 p-5 transition-colors hover:border-accent/40'
-              >
-                <Link
-                  href={`/issuer/credentials/${vc.id}`}
-                  className='flex flex-1 items-start gap-3 min-w-0'
-                >
-                  <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent'>
-                    <BadgeCheck className='h-5 w-5' />
-                  </div>
-                  <div className='min-w-0'>
-                    <div className='font-medium'>{displayType}</div>
-                    <div className='mt-0.5 text-sm text-muted-foreground truncate'>
-                      {holderName}
-                      {vc.organization && (
-                        <span className='ml-2 font-mono text-xs'>LEI {vc.organization.lei}</span>
-                      )}
-                    </div>
-                    <div className='mt-1 flex items-center gap-2'>
-                      <Badge variant={STATUS_VARIANT[vc.status]}>{vc.status}</Badge>
-                      <span className='text-xs text-muted-foreground'>
-                        {new Date(vc.issuedAt).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-                {vc.status === 'ACTIVE' && (
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    className='shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10'
-                    onClick={() => setRevokeTarget(vc)}
+              <Card key={vc.id} className='px-5 py-4 transition-colors hover:border-accent/40'>
+                <div className='flex items-center justify-between gap-4'>
+                  <Link
+                    href={`/issuer/credentials/${vc.id}`}
+                    className='flex items-center gap-3 min-w-0 flex-1'
                   >
-                    <ShieldOff className='h-4 w-4' />
-                    Revoke
-                  </Button>
-                )}
+                    <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent'>
+                      <BadgeCheck className='h-5 w-5' />
+                    </div>
+                    <div className='min-w-0'>
+                      <div className='font-medium'>{displayType}</div>
+                      <div className='mt-0.5 text-sm text-muted-foreground truncate'>
+                        {holderName}
+                        {vc.organization && (
+                          <span className='ml-2 font-mono text-xs'>LEI {vc.organization.lei}</span>
+                        )}
+                      </div>
+                      <div className='mt-1 flex items-center gap-2'>
+                        <Badge variant={STATUS_VARIANT[vc.status]}>{vc.status}</Badge>
+                        <span className='text-xs text-muted-foreground'>
+                          {new Date(vc.issuedAt).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                  {vc.status === 'ACTIVE' && (
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10'
+                      onClick={() => setRevokeTarget(vc)}
+                    >
+                      <ShieldOff className='h-4 w-4' />
+                      Revoke
+                    </Button>
+                  )}
+                </div>
               </Card>
             );
           })}

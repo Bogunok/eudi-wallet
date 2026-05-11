@@ -76,6 +76,15 @@ export default function CredentialDetailPage() {
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [schemaExpanded, setSchemaExpanded] = useState(false);
 
+  const [hasDid, setHasDid] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Array<{ id: string }>>('/did/my-dids')
+      .then(res => setHasDid(res.data.length > 0))
+      .catch(() => setHasDid(false));
+  }, []);
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -100,16 +109,27 @@ export default function CredentialDetailPage() {
   useEffect(() => {
     if (!updateOpen || !credential) return;
 
-    // Searching for schema through /schemas/available
+    const credentialTypeName = credential.type.length > 1 ? credential.type[1] : credential.type[0];
+
     api
-      .get<Array<{ id: string; structure: JsonSchemaStructure; issuerId: string }>>(
+      .get<Array<{ id: string; name: string; structure: JsonSchemaStructure; issuerId: string }>>(
         '/schemas/available',
       )
       .then(res => {
-        const schema = res.data.find(s => {
-          return true;
-        });
-        if (schema) setUpdateSchema(schema.structure);
+        // Шукаємо схему що відповідає типу vc
+        const schema = res.data.find(s => s.name === credentialTypeName);
+        if (schema) {
+          setUpdateSchema(schema.structure);
+          const currentPayload = credential.payload as Record<string, unknown>;
+          const prefilled: Record<string, string> = {};
+          for (const [key, value] of Object.entries(currentPayload)) {
+            if (['_sd', '_sd_alg', 'iss', 'sub', 'iat', 'vct', 'lei'].includes(key)) continue;
+            if (typeof value === 'string' || typeof value === 'number') {
+              prefilled[key] = String(value);
+            }
+          }
+          setUpdateFields(prefilled);
+        }
       })
       .catch(() => {});
   }, [updateOpen, credential]);
@@ -314,16 +334,25 @@ export default function CredentialDetailPage() {
               <p className='mt-0.5 text-xs text-muted-foreground'>
                 Ask the issuer to revoke this credential and issue a new one with updated data.
               </p>
+              {hasDid === false && (
+                <p className='mt-1 text-xs text-amber-600'>
+                  Create a DID first in{' '}
+                  <a href='/wallet/organization' className='underline'>
+                    Organization
+                  </a>{' '}
+                  to request updates.
+                </p>
+              )}
             </div>
             <Button
               variant='outline'
               size='sm'
               className='shrink-0'
               onClick={() => setUpdateOpen(true)}
-              disabled={updateSuccess}
+              disabled={updateSuccess || hasDid === false}
             >
               <RefreshCw className='h-4 w-4' />
-              {updateSuccess ? 'Requested' : 'Request update'}
+              {updateSuccess ? 'Requested' : 'Update'}
             </Button>
           </div>
 
@@ -343,7 +372,7 @@ export default function CredentialDetailPage() {
               disabled={revokeSuccess}
             >
               <ShieldOff className='h-4 w-4' />
-              {revokeSuccess ? 'Requested' : 'Request revocation'}
+              {revokeSuccess ? 'Requested' : 'Revoke'}
             </Button>
           </div>
         </Card>
@@ -477,30 +506,47 @@ export default function CredentialDetailPage() {
 
             {/* Updated data */}
             {formFields.length > 0 ? (
-              formFields.map(
-                field =>
-                  field.type !== 'unsupported' && (
-                    <div key={field.name} className='space-y-2'>
-                      <Label htmlFor={`update-${field.name}`}>
-                        {field.label}
-                        {field.required && <span className='ml-0.5 text-destructive'>*</span>}
-                      </Label>
+              <>
+                {credential.type.includes('LEI') &&
+                  (credential.payload as Record<string, unknown>)['lei'] && (
+                    <div className='space-y-2'>
+                      <Label>LEI Code</Label>
                       <Input
-                        id={`update-${field.name}`}
-                        type={field.type === 'number' ? 'number' : 'text'}
-                        value={updateFields[field.name] ?? ''}
-                        onChange={e =>
-                          setUpdateFields(prev => ({ ...prev, [field.name]: e.target.value }))
-                        }
-                        minLength={field.minLength}
-                        maxLength={field.maxLength}
+                        value={String((credential.payload as Record<string, unknown>)['lei'])}
+                        disabled
+                        className='bg-muted cursor-not-allowed font-mono'
                       />
-                      {field.description && (
-                        <p className='text-xs text-muted-foreground'>{field.description}</p>
-                      )}
+                      <p className='text-xs text-muted-foreground'>
+                        LEI code is preserved automatically and cannot be changed.
+                      </p>
                     </div>
-                  ),
-              )
+                  )}
+
+                {formFields.map(
+                  field =>
+                    field.type !== 'unsupported' && (
+                      <div key={field.name} className='space-y-2'>
+                        <Label htmlFor={`update-${field.name}`}>
+                          {field.label}
+                          {field.required && <span className='ml-0.5 text-destructive'>*</span>}
+                        </Label>
+                        <Input
+                          id={`update-${field.name}`}
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          value={updateFields[field.name] ?? ''}
+                          onChange={e =>
+                            setUpdateFields(prev => ({ ...prev, [field.name]: e.target.value }))
+                          }
+                          minLength={field.minLength}
+                          maxLength={field.maxLength}
+                        />
+                        {field.description && (
+                          <p className='text-xs text-muted-foreground'>{field.description}</p>
+                        )}
+                      </div>
+                    ),
+                )}
+              </>
             ) : (
               <div className='space-y-2'>
                 <Label>Updated data (JSON)</Label>

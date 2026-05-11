@@ -6,8 +6,8 @@ import { Wallet, ClipboardList, FileText, BadgeCheck, Building2, ShieldOff } fro
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/issuer/requests', label: 'Requests', icon: ClipboardList },
-  { href: '/issuer/revocation-requests', label: 'Revocation Requests', icon: ShieldOff },
+  { href: '/issuer/requests', label: 'Issuance Requests', icon: ClipboardList },
+  { href: '/issuer/revocation-requests', label: 'Revocation & Update Requests', icon: ShieldOff },
   { href: '/issuer/schemas', label: 'Schemas', icon: FileText },
   { href: '/issuer/credentials', label: 'Issued VCs', icon: BadgeCheck },
   { href: '/issuer/profile', label: 'Profile & DID', icon: Building2 },

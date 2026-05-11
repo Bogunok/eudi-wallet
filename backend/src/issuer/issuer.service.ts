@@ -15,6 +15,13 @@ import { GleifMockService } from './gleif-mock.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { Prisma, Role } from '@prisma/client';
 
+const CREDENTIAL_VALIDITY_DAYS: Record<string, number> = {
+  LEI: 365,
+  LegalEntityIdentifier: 365,
+  'Business License': 730,
+};
+const DEFAULT_VALIDITY_DAYS = 365;
+
 @Injectable()
 export class IssuerService {
   private ajv = new Ajv({ allErrors: true });
@@ -85,8 +92,14 @@ export class IssuerService {
     }));
   }
 
+  private computeExpiresAt(schemaName: string): Date {
+    const days = CREDENTIAL_VALIDITY_DAYS[schemaName] ?? DEFAULT_VALIDITY_DAYS;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
+    return expiresAt;
+  }
+
   async approveRequestAndIssue(requestId: string, issuerId: string, dto: ApproveRequestDto) {
-    // Знаходимо заявку
     const request = await this.prisma.verifiableCredentialRequest.findUnique({
       where: { id: requestId },
       include: { schema: true },
@@ -99,19 +112,25 @@ export class IssuerService {
       throw new BadRequestException('This request has been already processed');
     }
 
-    // Дістаємо DID Гаманця (кому видаємо)
     const holderOrg = await this.prisma.organization.findFirst({
       where: { userId: request.holderId },
     });
-    if (!holderOrg) throw new BadRequestException('Organization of the holder not found');
 
-    //логіка для перевірки у внутрішньому mock реєстрі
-    const claimData = request.claimData as any;
+    const claimData = request.claimData as Record<string, unknown>;
+    const isLeiSchema = request.schema.name === 'LEI';
+
+    if (!holderOrg && !isLeiSchema) {
+      throw new BadRequestException('Organization of the holder not found');
+    }
+
+    const finalClaimData: Record<string, unknown> = { ...claimData };
+    if (isLeiSchema && dto.assignedLei) {
+      finalClaimData['lei'] = dto.assignedLei;
+    }
 
     try {
       const validate = this.ajv.compile(request.schema.structure as object);
       const isValid = validate(claimData);
-
       if (!isValid) {
         const errorMessages = this.ajv.errorsText(validate.errors, { separator: ', ' });
         throw new BadRequestException(
@@ -130,38 +149,34 @@ export class IssuerService {
         companyName?: string;
         name?: string;
       };
-      const declaredLei = data.leiCode || data.lei || holderOrg.lei;
-      const declaredName = data.companyName || data.name || holderOrg.name;
+      const declaredLei = data.leiCode || data.lei || holderOrg?.lei || '';
+      const declaredName = data.companyName || data.name || holderOrg?.name || '';
 
       try {
         const isDataValid = await this.gleifMock.verifyOrganization(declaredLei, declaredName);
-
         if (!isDataValid) {
           await this.prisma.verifiableCredentialRequest.update({
             where: { id: requestId },
             data: { status: RequestStatus.REJECTED },
           });
-
           await this.notificationService.create({
             userId: request.holderId,
             title: 'Request denied',
             message: `Data differs from the official registry ${request.schema.name}.`,
             type: NotificationType.WARNING,
           });
-
           throw new BadRequestException(
             'Verification failed: The declared data does not match the official external registry.',
           );
         }
       } catch (error) {
-        if (error instanceof InternalServerErrorException) throw error;
+        if (error instanceof BadRequestException) throw error;
         throw new InternalServerErrorException(
           'Verification process encountered an unexpected network error.',
         );
       }
     }
 
-    // Дістаємо ключі Емітента і розшифровуємо їх PIN-кодом
     const issuerDidDoc = await this.prisma.didDocument.findFirst({
       where: { userId: issuerId },
     });
@@ -174,47 +189,47 @@ export class IssuerService {
       dto.pin,
     );
 
-    // Дістаємо DID Організації-отримувача з бази
     const holderDidDoc = await this.prisma.didDocument.findFirst({
       where: { userId: request.holderId },
     });
 
-    if (!holderDidDoc) {
+    if (!holderDidDoc && !isLeiSchema) {
       throw new BadRequestException('Organization has not set the DID yet');
     }
 
-    const subjectDid = holderDidDoc.did;
+    let subjectDid: string;
+    if (holderDidDoc) {
+      subjectDid = holderDidDoc.did;
+    } else {
+      const holderUser = await this.prisma.user.findUnique({
+        where: { id: request.holderId },
+      });
+      subjectDid = `mailto:${holderUser!.email}`;
+    }
 
-    const encodeBase64Url = (str: string | Buffer) => {
-      return (typeof str === 'string' ? Buffer.from(str) : str)
-        .toString('base64url')
-        .replace(/=/g, '');
-    };
+    const expiresAt = this.computeExpiresAt(request.schema.name);
 
-    const disclosures: string[] = []; // розкриті дані у Base64Url
-    const sdHashes: string[] = []; //  хеші, які покладемо в JWT
+    const encodeBase64Url = (str: string | Buffer) =>
+      (typeof str === 'string' ? Buffer.from(str) : str).toString('base64url').replace(/=/g, '');
 
-    // Проходимося по всіх даних, які ми хочемо зробити прихованими
-    for (const [key, value] of Object.entries(request.claimData as any)) {
+    const disclosures: string[] = [];
+    const sdHashes: string[] = [];
+
+    for (const [key, value] of Object.entries(finalClaimData)) {
       const salt = crypto.randomBytes(16).toString('base64url').replace(/=/g, '');
-
-      const disclosureArray = [salt, key, value];
-      const disclosureString = JSON.stringify(disclosureArray);
-
-      const disclosureB64url = encodeBase64Url(disclosureString);
+      const disclosureB64url = encodeBase64Url(JSON.stringify([salt, key, value]));
       disclosures.push(disclosureB64url);
-
       const hash = crypto.createHash('sha256').update(disclosureB64url).digest();
-      const hashB64url = encodeBase64Url(hash);
-      sdHashes.push(hashB64url);
+      sdHashes.push(encodeBase64Url(hash));
     }
 
     const jwtPayload = {
       iss: issuerDidDoc.did,
       sub: subjectDid,
       iat: Math.floor(Date.now() / 1000),
-      vct: request.schema.name, // Тип документа
-      _sd: sdHashes, // Масив хешів прихованих полів
+      exp: Math.floor(expiresAt.getTime() / 1000),
+      vct: request.schema.name,
+      _sd: sdHashes,
       _sd_alg: 'sha-256',
     };
 
@@ -229,24 +244,20 @@ export class IssuerService {
     });
 
     const signature = crypto.sign(null, Buffer.from(unsignedToken), privateKeyObj);
-    const signedJwt = `${unsignedToken}.${encodeBase64Url(signature)}`;
-
-    // ФІНАЛЬНИЙ SD-JWT
-    // Формат: <signed_jwt>~<disclosure_1>~<disclosure_2>~
-    // (Остання тильда обов'язкова, вона показує, що поки немає прив'язки до ключа - Key Binding)
-    const sdJwtToken = `${signedJwt}~${disclosures.join('~')}~`;
+    const sdJwtToken = `${unsignedToken}.${encodeBase64Url(signature)}~${disclosures.join('~')}~`;
 
     const issuedCredential = await this.prisma.verifiableCredential.create({
       data: {
         type: ['VerifiableCredential', request.schema.name],
         issuerDid: issuerDidDoc.did,
-        subjectDid: subjectDid,
-        payload: jwtPayload,
+        subjectDid,
+        payload: finalClaimData as Prisma.JsonObject,
         rawJwt: sdJwtToken,
         issuedAt: new Date(),
+        expiresAt,
         status: VerifiableCredentialStatus.ACTIVE,
         userId: request.holderId,
-        organizationId: holderOrg.id,
+        organizationId: holderOrg?.id ?? null,
       },
     });
 
@@ -258,7 +269,7 @@ export class IssuerService {
     await this.notificationService.create({
       userId: request.holderId,
       title: 'Document issued!',
-      message: `Your document ${request.schema.name} was successfully added to wallet`,
+      message: `Your document "${request.schema.name}" was successfully added to your wallet.`,
       type: NotificationType.ISSUANCE,
     });
 
@@ -268,7 +279,6 @@ export class IssuerService {
     };
   }
 
-  // private helper method to sign and save credential (when holder wants to update credential)
   private async signAndSaveCredential(params: {
     issuerId: string;
     holderId: string;
@@ -297,6 +307,7 @@ export class IssuerService {
     if (!holderDidDoc) throw new BadRequestException('Organization has not set the DID yet');
 
     const subjectDid = holderDidDoc.did;
+    const expiresAt = this.computeExpiresAt(schemaName);
 
     const encodeBase64Url = (str: string | Buffer) =>
       (typeof str === 'string' ? Buffer.from(str) : str).toString('base64url').replace(/=/g, '');
@@ -316,6 +327,7 @@ export class IssuerService {
       iss: issuerDidDoc.did,
       sub: subjectDid,
       iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(expiresAt.getTime() / 1000),
       vct: schemaName,
       _sd: sdHashes,
       _sd_alg: 'sha-256',
@@ -339,9 +351,10 @@ export class IssuerService {
         type: ['VerifiableCredential', schemaName],
         issuerDid: issuerDidDoc.did,
         subjectDid,
-        payload: jwtPayload,
+        payload: claimData as Prisma.JsonObject,
         rawJwt: sdJwtToken,
         issuedAt: new Date(),
+        expiresAt,
         status: VerifiableCredentialStatus.ACTIVE,
         userId: holderId,
         organizationId: holderOrgId,
@@ -359,6 +372,7 @@ export class IssuerService {
     if (!issuerDidDoc || issuerDidDoc.userId !== issuerId) {
       throw new ForbiddenException('Only the issuer can revoke this credential');
     }
+
     const revokedVc = await this.prisma.verifiableCredential.update({
       where: { id: vcId },
       data: { status: VerifiableCredentialStatus.REVOKED },
@@ -416,12 +430,22 @@ export class IssuerService {
       });
       if (!holderOrg) throw new BadRequestException('Holder organization not found');
 
+      let finalClaimData = request.newClaimData as Record<string, unknown>;
+
+      if (schema.name === 'LEI') {
+        const oldPayload = request.vc.payload as Record<string, unknown>;
+        finalClaimData = {
+          lei: oldPayload['lei'],
+          ...finalClaimData,
+        };
+      }
+
       await this.signAndSaveCredential({
         issuerId,
         holderId: request.holderId,
         holderOrgId: holderOrg.id,
         schemaName: schema.name,
-        claimData: request.newClaimData as Record<string, unknown>,
+        claimData: finalClaimData,
         pin,
       });
     }
